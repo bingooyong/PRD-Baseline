@@ -1,0 +1,175 @@
+# Zap Baseline (Go)
+# Zap 基线（Go）
+
+baseline:
+  id: ID-LOG-ZAP
+  name: Zap Baseline
+  domain: Logging & Observability
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Go applications using Zap
+    - Lumberjack integration
+  out_of_scope:
+    - Other Go logging libraries
+    - Non-Go applications
+
+objectives:
+  - Ensure Zap configuration meets Baseline requirements
+  - Prevent disk exhaustion from log growth
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  - id: LOG-ZAP-01
+    title: Lumberjack Integration
+    level: MUST
+    description: >
+      Zap must use lumberjack for log rotation.
+      Direct file writing without rotation is forbidden.
+    rules:
+      lumberjack_required: true
+      direct_file_write_forbidden: true
+      lumberjack_package: "gopkg.in/natefinch/lumberjack.v2"
+    verification:
+      type: code_review
+      evidence: zap_lumberjack_integration
+
+  - id: LOG-ZAP-02
+    title: File Size Limit
+    level: MUST
+    description: >
+      Lumberjack MaxSize must be configured.
+      Default is 50MB, absolute maximum is 100MB.
+    rules:
+      max_size_required: true
+      max_size_mb: 50
+      max_size_absolute_max_mb: 100
+      max_size_unit: MB
+    verification:
+      type: code_review
+      evidence: zap_max_size_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-02
+
+  - id: LOG-ZAP-03
+    title: Backup File Limit
+    level: MUST
+    description: >
+      MaxBackups must be set to a finite value.
+      MaxBackups = 0 is forbidden.
+    rules:
+      max_backups_required: true
+      max_backups_count: 7
+      max_backups_absolute_max: 30
+      forbid_max_backups_zero: true
+    verification:
+      type: code_review
+      evidence: zap_max_backups_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-07
+
+  - id: LOG-ZAP-04
+    title: File Age Limit
+    level: MUST
+    description: >
+      MaxAge must be set to a finite value.
+      MaxAge = 0 is forbidden.
+    rules:
+      max_age_required: true
+      max_age_days: 7
+      max_age_absolute_max_days: 30
+      forbid_max_age_zero: true
+    verification:
+      type: code_review
+      evidence: zap_max_age_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-07
+
+  - id: LOG-ZAP-05
+    title: Compression
+    level: SHOULD
+    description: >
+      Compress should be enabled for rotated files.
+      Compression saves disk space.
+    rules:
+      compress_enabled: true
+      compress_rotated_files: true
+    verification:
+      type: code_review
+      evidence: zap_compress_config
+
+  - id: LOG-ZAP-06
+    title: Log Level Configuration
+    level: MUST
+    description: >
+      Production must use InfoLevel.
+      DebugLevel is forbidden.
+    rules:
+      production_log_level: InfoLevel
+      debug_logging_forbidden: true
+      error_logging_always_enabled: true
+    verification:
+      type: code_review
+      evidence: zap_level_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-03
+
+implementation:
+  template: |
+    import (
+        "go.uber.org/zap"
+        "go.uber.org/zap/zapcore"
+        "gopkg.in/natefinch/lumberjack.v2"
+    )
+    
+    logger := zap.New(
+        zapcore.NewCore(
+            zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+            zapcore.AddSync(&lumberjack.Logger{
+                Filename:   "/opt/app/logs/app.log",
+                MaxSize:    50,   // MB
+                MaxBackups: 7,
+                MaxAge:     7,    // days
+                Compress:   true,
+            }),
+            zap.InfoLevel,
+        ),
+    )
+
+  required_elements:
+    - lumberjack.Logger
+    - MaxSize (50 MB)
+    - MaxBackups (7)
+    - MaxAge (7 days)
+    - zap.InfoLevel
+
+  forbidden_patterns:
+    - Direct file writing without lumberjack
+    - MaxBackups = 0
+    - MaxAge = 0
+    - zap.DebugLevel in production
+
+references:
+  - standard: ID-LOG-BASE
+    section: All
+  - standard: ID-CAP-LOG
+    section: CAP-LOG-03
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Zap-specific configuration requirements
+      - Prevents disk exhaustion in Go applications

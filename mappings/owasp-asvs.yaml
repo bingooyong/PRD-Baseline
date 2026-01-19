@@ -1,0 +1,52 @@
+# OWASP ASVS Mapping
+# Maps Baseline requirements to OWASP Application Security Verification Standard
+
+mapping:
+  standard: OWASP-ASVS
+  version: "4.0"
+  description: Mapping from PRD Baseline to OWASP ASVS requirements
+
+baseline_mappings:
+  ID-AUTH-LOGIN:
+    requirements:
+      AUTH-01:
+        - asvs_id: V2.1.1
+          title: Verify that user set passwords are at least 12 characters in length
+      AUTH-03:
+        - asvs_id: V2.1.2
+          title: Verify that passwords can contain special characters
+        - asvs_id: V2.1.3
+          title: Verify that passwords are hashed using an approved cryptographic hash function
+      AUTH-04:
+        - asvs_id: V2.1.4
+          title: Verify that passwords are salted using a salt that is unique to that password
+      AUTH-07:
+        - asvs_id: V2.2.1
+          title: Verify that account lockout is enforced after a maximum number of failed login attempts
+      AUTH-08:
+        - asvs_id: V2.2.2
+          title: Verify that account lockout duration is set appropriately
+      AUTH-11:
+        - asvs_id: V2.3.1
+          title: Verify that multi-factor authentication is required for sensitive operations
+      AUTH-13:
+        - asvs_id: V3.1.1
+          title: Verify that session tokens are generated using a cryptographically secure random number generator
+      AUTH-14:
+        - asvs_id: V3.1.2
+          title: Verify that session tokens are stored securely
+      AUTH-15:
+        - asvs_id: V3.2.1
+          title: Verify that sessions are invalidated when the user logs out
+        - asvs_id: V3.2.2
+          title: Verify that sessions timeout after a defined period of inactivity
+      AUTH-18:
+        - asvs_id: V2.1.5
+          title: Verify that passwords are transmitted only over TLS or other strong transport
+      AUTH-20:
+        - asvs_id: V7.1.1
+          title: Verify that all authentication events are logged
+
+reference:
+  url: https://owasp.org/www-project-application-security-verification-standard/
+  latest_version: "4.0"

@@ -1,0 +1,179 @@
+# Log4j2 Baseline (Java)
+# Log4j2 基线（Java）
+
+baseline:
+  id: ID-LOG-LOG4J2
+  name: Log4j2 Baseline
+  domain: Logging & Observability
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Java applications using Log4j2
+    - log4j2.xml configuration
+  out_of_scope:
+    - Logback applications
+    - Other logging frameworks
+
+objectives:
+  - Ensure Log4j2 configuration meets Baseline requirements
+  - Prevent disk exhaustion from log growth
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  - id: LOG-LOG4J2-01
+    title: RollingFile Configuration
+    level: MUST
+    description: >
+      Log4j2 must use RollingFile with both TimeBased and SizeBased policies.
+      Single policy is forbidden.
+    rules:
+      appender_type: RollingFile
+      policies_required:
+        - TimeBasedTriggeringPolicy
+        - SizeBasedTriggeringPolicy
+      both_policies_required: true
+      forbid_single_policy: true
+    verification:
+      type: config_review
+      evidence: log4j2_appender_config
+
+  - id: LOG-LOG4J2-02
+    title: File Size Limit
+    level: MUST
+    description: >
+      SizeBasedTriggeringPolicy must have size limit.
+      Default is 50MB, absolute maximum is 100MB.
+    rules:
+      size_limit_required: true
+      size_limit_mb: 50
+      size_limit_absolute_max_mb: 100
+    verification:
+      type: config_review
+      evidence: log4j2_size_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-02
+
+  - id: LOG-LOG4J2-03
+    title: Rollover Strategy
+    level: MUST
+    description: >
+      DefaultRolloverStrategy must have max attribute.
+      Delete action must be configured for old files.
+    rules:
+      max_rollover_required: true
+      max_rollover_count: 7
+      delete_action_required: true
+      delete_age_days: 7
+    verification:
+      type: config_review
+      evidence: log4j2_rollover_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-07
+
+  - id: LOG-LOG4J2-04
+    title: Async Logging
+    level: MUST
+    description: >
+      Log4j2 must use AsyncAppender in production.
+      Synchronous logging is forbidden.
+    rules:
+      async_appender_required: true
+      sync_appender_forbidden: true
+      async_queue_size: 256
+    verification:
+      type: config_review
+      evidence: log4j2_async_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-04
+
+  - id: LOG-LOG4J2-05
+    title: Log Level Configuration
+    level: MUST
+    description: >
+      Production must use INFO level.
+      DEBUG level is forbidden.
+    rules:
+      production_log_level: INFO
+      debug_logging_forbidden: true
+    verification:
+      type: config_review
+      evidence: log4j2_level_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-03
+
+implementation:
+  template: |
+    <Configuration>
+        <Appenders>
+            <RollingFile name="RollingFile"
+                fileName="/opt/app/logs/app.log"
+                filePattern="/opt/app/logs/app-%d{yyyy-MM-dd}-%i.log.gz">
+                
+                <PatternLayout>
+                    <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %p %c - %m%n</Pattern>
+                </PatternLayout>
+                
+                <Policies>
+                    <TimeBasedTriggeringPolicy />
+                    <SizeBasedTriggeringPolicy size="50MB"/>
+                </Policies>
+                
+                <DefaultRolloverStrategy max="7">
+                    <Delete basePath="/opt/app/logs" maxDepth="1">
+                        <IfFileName glob="*.log.gz"/>
+                        <IfLastModified age="7d"/>
+                    </Delete>
+                </DefaultRolloverStrategy>
+            </RollingFile>
+            
+            <Async name="Async">
+                <AppenderRef ref="RollingFile"/>
+            </Async>
+        </Appenders>
+        
+        <Loggers>
+            <Root level="INFO">
+                <AppenderRef ref="Async"/>
+            </Root>
+        </Loggers>
+    </Configuration>
+
+  required_elements:
+    - RollingFile
+    - TimeBasedTriggeringPolicy
+    - SizeBasedTriggeringPolicy
+    - DefaultRolloverStrategy with max
+    - Delete action
+    - Async appender
+    - Root level="INFO"
+
+  forbidden_patterns:
+    - Single policy (TimeBased or SizeBased alone)
+    - No max in DefaultRolloverStrategy
+    - No Delete action
+    - Root level="DEBUG"
+
+references:
+  - standard: ID-LOG-BASE
+    section: All
+  - standard: ID-CAP-LOG
+    section: CAP-LOG-03
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Log4j2-specific configuration requirements
+      - Prevents disk exhaustion in Java applications

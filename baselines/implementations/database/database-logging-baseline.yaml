@@ -1,0 +1,202 @@
+# Database Logging & Table Capacity Baseline
+# 数据库日志与表容量基线
+
+baseline:
+  id: ID-DB-LOG-CAP
+  name: Database Logging & Table Capacity Baseline
+  domain: Database Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Data Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Database binlog
+    - Database slow log
+    - Database error log
+    - Business flow tables
+    - Event log tables
+    - Large tables requiring partitioning
+  out_of_scope:
+    - Core business transaction tables (permanent)
+    - User account tables (permanent)
+
+objectives:
+  - Prevent database disk exhaustion from logs
+  - Ensure predictable table growth and cleanup
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Database Logs
+  - id: DB-LOG-01
+    title: Binlog Expiration
+    level: MUST
+    description: >
+      Database binlog must have expiration configured.
+      Binlog must not grow unbounded.
+    applies_to:
+      - mysql
+      - mariadb
+    rules:
+      binlog_expiration_required: true
+      binlog_expire_logs_seconds: 604800
+      binlog_expire_logs_days: 7
+      auto_purge_enabled: true
+    implementation:
+      mysql: "SET GLOBAL binlog_expire_logs_seconds = 604800;"
+      mariadb: "SET GLOBAL binlog_expire_logs_seconds = 604800;"
+    verification:
+      type: config_review
+      evidence: binlog_expiration_config
+    references:
+      - standard: ID-CAP-DATA
+        section: CAP-DATA-09
+
+  - id: DB-LOG-02
+    title: Slow Log Management
+    level: MUST
+    description: >
+      Slow query log must have size limit.
+      Slow log must be rotated and cleaned up.
+    applies_to:
+      - mysql
+      - mariadb
+    rules:
+      slow_log_size_limit_required: true
+      slow_log_max_size_mb: 100
+      slow_log_rotation_required: true
+      slow_log_cleanup_required: true
+    verification:
+      type: config_review
+      evidence: slow_log_config
+
+  - id: DB-LOG-03
+    title: Error Log Management
+    level: MUST
+    description: >
+      Database error log must be managed.
+      Error log must be included in logrotate.
+    applies_to:
+      - mysql
+      - mariadb
+      - postgresql
+    rules:
+      error_log_management_required: true
+      error_log_in_logrotate: true
+      error_log_retention_days: 14
+    verification:
+      type: config_review
+      evidence: error_log_config
+    references:
+      - standard: ID-LOG-ROTATE
+        section: LOG-ROTATE-01
+
+  # Business Flow Tables
+  - id: DB-LOG-04
+    title: Flow Table Partitioning
+    level: MUST
+    description: >
+      Business flow tables must be partitioned by time.
+      Partitioning enables efficient cleanup.
+    applies_to:
+      - order_flow_tables
+      - transaction_flow_tables
+      - event_log_tables
+      - audit_log_tables
+    rules:
+      partitioning_required: true
+      partition_by_time: true
+      partition_interval: monthly
+      partition_format: "YYYY_MM"
+    implementation:
+      mysql: |
+        CREATE TABLE order_flow_2026_01 (
+            id BIGINT PRIMARY KEY,
+            create_time DATETIME NOT NULL
+        )
+        PARTITION BY RANGE (TO_DAYS(create_time)) (
+            PARTITION p202601 VALUES LESS THAN (TO_DAYS('2026-02-01'))
+        );
+    verification:
+      type: design_review
+      evidence: table_partitioning_design
+    references:
+      - standard: ID-CAP-DATA
+        section: CAP-DATA-01
+
+  - id: DB-LOG-05
+    title: Flow Table Cleanup
+    level: MUST
+    description: >
+      Flow tables must support time-based cleanup.
+      Old partitions must be dropped automatically.
+    rules:
+      time_based_cleanup_required: true
+      cleanup_method: drop_partition
+      retention_days: 90
+      cleanup_schedule: daily
+      cleanup_time: "02:00"
+    verification:
+      type: process_review
+      evidence: cleanup_job_config
+    references:
+      - standard: ID-CAP-DATA
+        section: CAP-DATA-03
+
+  # Large Table Design
+  - id: DB-LOG-06
+    title: Table Size Limits
+    level: MUST
+    description: >
+      Large tables must have size limits.
+      Tables exceeding limits must trigger cleanup.
+    rules:
+      max_table_rows: 100000000
+      max_table_size_gb: 50
+      warning_threshold_gb: 40
+      actions_on_exceed:
+        - reject_write
+        - trigger_cleanup
+        - emit_alert
+    verification:
+      type: design_review
+      evidence: table_size_limits
+    references:
+      - standard: ID-CAP-DATA
+        section: CAP-DATA-02
+
+  - id: DB-LOG-07
+    title: Cold-Hot Data Separation
+    level: SHOULD
+    description: >
+      Large tables should support cold-hot data separation.
+      Old data should be archived to cold storage.
+    rules:
+      cold_hot_separation_enabled: true
+      archive_old_data: true
+      archive_after_days: 90
+      archive_location: cold_storage
+    verification:
+      type: design_review
+      evidence: archive_strategy
+    references:
+      - standard: ID-CAP-DATA
+        section: CAP-DATA-07
+
+references:
+  - standard: ID-LOG-BASE
+    section: All
+  - standard: ID-CAP-DATA
+    section: All
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Database log and table capacity management
+      - Prevents database disk exhaustion

@@ -1,0 +1,278 @@
+# Certificate & Secret Lifecycle Management Baseline
+# 证书与密钥生命周期管理基线
+
+baseline:
+  id: ID-CERT-LC
+  name: Certificate & Secret Lifecycle Management Baseline
+  domain: Security & Compliance
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Security Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - TLS/SSL certificates
+    - API keys
+    - Access tokens
+    - Service account credentials
+    - Database credentials
+    - Third-party service credentials
+  out_of_scope:
+    - User passwords (see Password Policy Baseline)
+    - Hardware security modules (HSM)
+
+objectives:
+  - Prevent certificate/secret expiration incidents
+  - Ensure automatic certificate renewal
+  - Enable secure secret rotation
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Certificate Management
+  - id: CERT-01
+    title: Certificate Lifecycle Tracking
+    level: MUST
+    description: >
+      All certificates must be tracked with expiration dates.
+      Certificate inventory must be maintained and updated.
+    rules:
+      certificate_inventory_required: true
+      track_expiration_dates: true
+      update_inventory_on_change: true
+      inventory_audit_frequency: monthly
+    verification:
+      type: process_review
+      evidence: certificate_inventory
+    references:
+      - standard: Best-Practice
+        section: Certificate Management
+
+  - id: CERT-02
+    title: Certificate Expiration Monitoring
+    level: MUST
+    description: >
+      Certificate expiration must be monitored.
+      Alerts must be sent before expiration.
+    rules:
+      monitoring_enabled: true
+      check_interval_days: 1
+      warning_days_before_expiry: 30
+      critical_days_before_expiry: 7
+      actions:
+        warning:
+          - emit_warning_alert
+          - schedule_renewal
+        critical:
+          - emit_critical_alert
+          - immediate_renewal_required
+    verification:
+      type: runtime_check
+      evidence: certificate_monitoring_logs
+    references:
+      - standard: Best-Practice
+        section: Expiration Monitoring
+
+  - id: CERT-03
+    title: Automatic Certificate Renewal
+    level: MUST
+    description: >
+      Certificates must support automatic renewal.
+      Manual renewal should only be required for exceptions.
+    rules:
+      auto_renewal_enabled: true
+      renewal_before_expiry_days: 30
+      renewal_retry_attempts: 3
+      renewal_notification: true
+      fallback_to_manual: true
+    verification:
+      type: runtime_check
+      evidence: auto_renewal_execution
+    references:
+      - standard: Best-Practice
+        section: Auto-Renewal
+
+  - id: CERT-04
+    title: Certificate Validation
+    level: MUST
+    description: >
+      Certificate validity must be validated before use.
+      Invalid or expired certificates must be rejected.
+    rules:
+      validate_before_use: true
+      check_expiration: true
+      check_signature: true
+      check_chain: true
+      reject_invalid: true
+    verification:
+      type: code_review
+      evidence: certificate_validation_logic
+
+  # Secret Management
+  - id: CERT-05
+    title: Secret Lifecycle Tracking
+    level: MUST
+    description: >
+      All secrets (API keys, tokens, credentials) must be tracked.
+      Secret expiration and rotation must be managed.
+    rules:
+      secret_inventory_required: true
+      track_secret_expiration: true
+      track_secret_rotation: true
+      update_inventory_on_change: true
+    verification:
+      type: process_review
+      evidence: secret_inventory
+
+  - id: CERT-06
+    title: Secret Expiration Monitoring
+    level: MUST
+    description: >
+      Secret expiration must be monitored.
+      Alerts must be sent before expiration.
+    rules:
+      monitoring_enabled: true
+      check_interval_days: 1
+      warning_days_before_expiry: 30
+      critical_days_before_expiry: 7
+      actions:
+        warning:
+          - emit_warning_alert
+          - schedule_rotation
+        critical:
+          - emit_critical_alert
+          - immediate_rotation_required
+    verification:
+      type: runtime_check
+      evidence: secret_monitoring_logs
+
+  - id: CERT-07
+    title: Secret Rotation
+    level: MUST
+    description: >
+      Secrets must support rotation without service interruption.
+      Rotation must be tested and validated.
+    rules:
+      rotation_support_required: true
+      zero_downtime_rotation: true
+      rotation_testing: true
+      rotation_validation: true
+      rollback_on_failure: true
+    verification:
+      type: process_review
+      evidence: secret_rotation_process
+    references:
+      - standard: Best-Practice
+        section: Secret Rotation
+
+  - id: CERT-08
+    title: Secret Storage
+    level: MUST
+    description: >
+      Secrets must be stored securely (encrypted, secret management system).
+      Secrets must not be hardcoded or stored in plaintext.
+    rules:
+      encrypted_storage: true
+      use_secret_management: true
+      no_hardcoded_secrets: true
+      no_plaintext_storage: true
+    verification:
+      type: security_review
+      evidence: secret_storage_implementation
+    references:
+      - standard: OWASP-ASVS
+        section: V7.2
+
+  # Certificate/Secret Access
+  - id: CERT-09
+    title: Certificate/Secret Access Control
+    level: MUST
+    description: >
+      Certificate and secret access must be controlled.
+      Only authorized personnel can view or modify certificates/secrets.
+    rules:
+      access_control_required: true
+      rbac_for_certificates: true
+      audit_certificate_access: true
+      readonly_for_non_admins: true
+    verification:
+      type: security_review
+      evidence: certificate_access_control
+
+  - id: CERT-10
+    title: Certificate/Secret Backup
+    level: MUST
+    description: >
+      Certificates and secrets must be backed up securely.
+      Backup must be encrypted and access-controlled.
+    rules:
+      backup_enabled: true
+      backup_encrypted: true
+      backup_access_controlled: true
+      backup_retention_days: 90
+    verification:
+      type: process_review
+      evidence: backup_process
+
+audit:
+  logging_required: true
+  events:
+    - certificate_expiration_warning
+    - certificate_expiration_critical
+    - certificate_renewal
+    - secret_expiration_warning
+    - secret_rotation
+    - certificate_access
+    - secret_access
+  required_fields:
+    - timestamp
+    - event_type
+    - certificate_secret_name
+    - expiration_date
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Security_Officer
+  documentation_required: true
+
+forbidden:
+  - hardcoded_certificates
+  - hardcoded_secrets
+  - no_expiration_monitoring
+  - no_auto_renewal
+  - plaintext_secret_storage
+
+acceptance:
+  - id: CERT-AC-01
+    scenario: Certificate expiration monitoring
+    expected_result:
+      warning_at_30_days: true
+      critical_alert_at_7_days: true
+      alerts_sent: true
+
+  - id: CERT-AC-02
+    scenario: Automatic certificate renewal
+    expected_result:
+      auto_renewal_works: true
+      renewal_before_expiry: true
+      service_continues: true
+
+  - id: CERT-AC-03
+    scenario: Secret rotation
+    expected_result:
+      rotation_works: true
+      zero_downtime: true
+      rollback_on_failure: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers certificate and secret lifecycle management
+      - Prevents expiration-related incidents

@@ -1,0 +1,280 @@
+# Logging & Rotation Baseline (Abstract Requirements)
+# 日志与滚动基线（抽象需求层）
+
+baseline:
+  id: ID-LOG-BASE
+  name: Logging & Rotation Baseline
+  domain: Logging & Observability
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application logs
+    - System logs
+    - Database logs (binlog, slow log, error log)
+    - All logging frameworks (Logback, Log4j2, Zap, etc.)
+  out_of_scope:
+    - OS-level system logs (managed by OS)
+    - Third-party application logs (if not configurable)
+
+objectives:
+  - Prevent disk exhaustion from log growth
+  - Ensure predictable log retention and cleanup
+  - Support offline/private deployment without manual intervention
+  - Provide unified logging standards across all frameworks
+
+requirements:
+
+  # Basic Logging Requirements
+  - id: LOG-BASE-00
+    title: Console Logging Forbidden
+    level: MUST
+    description: >
+      Console logging (stdout/stderr) is strictly forbidden in production environment.
+      Console logs cannot be rotated, have no size limits, and cause disk exhaustion
+      in containerized/private deployment scenarios. All logs must be written to files
+      with proper rotation policies.
+    rules:
+      console_logging_forbidden: true
+      stdout_stderr_forbidden: true
+      file_logging_required: true
+      production_console_logging_forbidden: true
+    verification:
+      type: config_review
+      evidence: no_console_logging_config
+    references:
+      - standard: ID-CAP-LOG
+        section: CAP-LOG-01
+
+  - id: LOG-BASE-01
+    title: Log Output Location
+    level: MUST
+    description: >
+      Logs must not be written to system critical directories.
+      Logs must be written to dedicated log directories.
+    rules:
+      forbid_system_directories: true
+      allowed_system_directory: "/var/log"
+      dedicated_log_directory: "/opt/app/logs"
+      log_directory_per_application: true
+    verification:
+      type: config_review
+      evidence: log_directory_config
+
+  - id: LOG-BASE-02
+    title: Maximum Single File Size
+    level: MUST
+    description: >
+      Each log file must have a maximum size limit.
+      Default maximum size is 50MB, absolute maximum is 100MB.
+    rules:
+      max_file_size_mb: 50
+      max_file_size_absolute_mb: 100
+      apply_per_file: true
+      rotate_on_size_limit: true
+    verification:
+      type: config_review
+      evidence: log_file_size_config
+    references:
+      - standard: ID-CAP-LOG
+        section: CAP-LOG-02
+
+  - id: LOG-BASE-03
+    title: Log Level Configuration
+    level: MUST
+    description: >
+      Production environment must use INFO level by default.
+      ERROR level logging must always be enabled.
+      DEBUG level must be forbidden in production.
+    rules:
+      production_log_level: INFO
+      error_logging_always_enabled: true
+      debug_logging_forbidden: true
+      log_level_configurable: true
+    verification:
+      type: config_review
+      evidence: log_level_config
+
+  - id: LOG-BASE-04
+    title: Async Logging
+    level: MUST
+    description: >
+      Logging must be asynchronous to avoid IO blocking.
+      Synchronous logging is forbidden in production.
+    rules:
+      async_logging_required: true
+      sync_logging_forbidden: true
+      async_queue_size: 256
+      async_discard_threshold: WARN
+    verification:
+      type: config_review
+      evidence: async_logging_config
+
+  - id: LOG-BASE-05
+    title: Log Encoding and Timezone
+    level: MUST
+    description: >
+      Logs must use UTF-8 encoding.
+      Timezone must be explicitly specified (UTC preferred).
+    rules:
+      encoding: UTF-8
+      timezone_required: true
+      preferred_timezone: UTC
+      timezone_explicit: true
+    verification:
+      type: config_review
+      evidence: log_encoding_config
+
+  # Rotation Strategy
+  - id: LOG-BASE-06
+    title: Log Rotation Strategy
+    level: MUST
+    description: >
+      Log rotation must be based on both size AND time.
+      Rotation must be automatic and require no manual intervention.
+    rules:
+      rotation_modes:
+        - size_based
+        - time_based
+      size_based:
+        enabled: true
+        rotate_at_mb: 50
+      time_based:
+        enabled: true
+        rotate_interval: daily
+      both_modes_required: true
+      automatic_rotation: true
+    verification:
+      type: config_review
+      evidence: rotation_policy_config
+    references:
+      - standard: ID-CAP-LOG
+        section: CAP-LOG-03
+
+  - id: LOG-BASE-07
+    title: Log File Retention
+    level: MUST
+    description: >
+      Log files must have retention policies.
+      Maximum history and total size must be limited.
+    rules:
+      max_history_days: 7
+      max_file_count: 7
+      max_total_size_gb: 5
+      max_total_size_mb: 5120
+      cleanup_strategy: delete_oldest
+      automatic_cleanup: true
+    verification:
+      type: config_review
+      evidence: retention_policy_config
+    references:
+      - standard: ID-CAP-LOG
+        section: CAP-LOG-04
+
+  - id: LOG-BASE-08
+    title: Log Compression
+    level: SHOULD
+    description: >
+      Rotated log files should be compressed.
+      Compression should use gzip format.
+    rules:
+      compress_after_rotation: true
+      compression_format: gz
+      delay_compression: false
+    verification:
+      type: config_review
+      evidence: compression_config
+
+  # Cleanup Responsibility
+  - id: LOG-BASE-09
+    title: Log Cleanup Responsibility
+    level: MUST
+    description: >
+      Application layer must support log rotation.
+      System layer (logrotate) may provide fallback.
+      Manual cleanup by operations is not allowed long-term.
+    rules:
+      application_layer_rotation_required: true
+      system_layer_rotation_optional: true
+      manual_cleanup_forbidden: true
+      automatic_cleanup_required: true
+    verification:
+      type: process_review
+      evidence: cleanup_responsibility_assignment
+
+  # Structured Logging
+  - id: LOG-BASE-10
+    title: Structured Logging
+    level: SHOULD
+    description: >
+      Logs should use structured format (JSON).
+      Structured logs enable efficient parsing and filtering.
+    rules:
+      structured_logging: true
+      log_format: JSON
+      enable_log_filtering: true
+    verification:
+      type: config_review
+      evidence: structured_logging_config
+
+audit:
+  logging_required: true
+  events:
+    - log_rotation
+    - log_cleanup
+    - log_file_size_exceeded
+  required_fields:
+    - timestamp
+    - event_type
+    - log_file_path
+    - file_size_mb
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - write_logs_to_system_directories
+  - unbounded_log_files
+  - no_log_rotation
+  - manual_log_cleanup_required
+  - sync_logging_in_production
+  - debug_logging_in_production
+
+acceptance:
+  - id: LOG-BASE-AC-01
+    scenario: Log file size limit
+    expected_result:
+      log_file_rotated_at_50mb: true
+      no_single_file_exceeds_100mb: true
+      rotation_automatic: true
+
+  - id: LOG-BASE-AC-02
+    scenario: Log retention and cleanup
+    expected_result:
+      logs_older_than_7_days_deleted: true
+      total_log_size_under_5gb: true
+      cleanup_runs_automatically: true
+
+  - id: LOG-BASE-AC-03
+    scenario: Rotation strategy
+    expected_result:
+      rotation_by_size_works: true
+      rotation_by_time_works: true
+      both_strategies_active: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Unified logging requirements across all frameworks
+      - Prevents disk exhaustion from log growth

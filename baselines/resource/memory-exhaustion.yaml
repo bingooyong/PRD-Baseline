@@ -1,0 +1,432 @@
+# Memory & Resource Exhaustion Baseline
+# 内存与资源耗尽治理基线（企业级）
+
+baseline:
+  id: ID-RES-MEM
+  name: Memory & Resource Exhaustion Baseline
+  domain: Resource Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application memory usage
+    - In-memory caches
+    - Queues and buffers
+    - Collections (Map, List, Set)
+    - Producer-consumer patterns
+    - Runtime memory configuration (JVM, Go, Python)
+    - Long-running services
+  out_of_scope:
+    - OS-level memory management
+    - Hardware memory issues
+    - Memory leaks in third-party libraries (if not fixable)
+
+objectives:
+  - Prevent unbounded memory growth
+  - Ensure predictable memory usage in long-running services
+  - Avoid OOM kill and service crash
+  - Support offline/private deployment with limited resources
+  - Enable proactive memory management
+
+requirements:
+
+  # Global Memory Constraints
+  - id: RES-MEM-01
+    title: Explicit Memory Limit Declaration
+    level: MUST
+    description: >
+      Each service must declare an explicit maximum memory usage limit.
+      No service should rely on "unlimited" memory assumption.
+      Memory limits must be enforced at container/process level.
+    rules:
+      memory_limit_required: true
+      memory_limit_mb: 2048
+      memory_limit_gb: 2
+      enforce_at_container_level: true
+      enforce_at_process_level: true
+      no_unlimited_assumption: true
+    verification:
+      type: config_review
+      evidence: memory_limit_config
+    references:
+      - standard: Best-Practice
+        section: Memory Limits
+    notes:
+      - "没有上限 = 默认无限 = 事故必然发生"
+
+  # Cache and Collection Management
+  - id: RES-MEM-02
+    title: Cache Size Limit
+    level: MUST
+    description: >
+      All caches must have explicit size limits (by count or memory).
+      Caches must not grow unbounded.
+      Eviction policy must be configured.
+    applies_to:
+      - in_memory_cache
+      - local_cache
+      - distributed_cache_local_component
+    rules:
+      max_entries_required: true
+      max_cache_size_mb: 512
+      max_cache_entries: 100000
+      eviction_policy_required: true
+      allowed_eviction_policies:
+        - LRU
+        - LFU
+        - TTL
+        - FIFO
+      default_eviction_policy: LRU
+      cache_ttl_seconds: 3600
+    verification:
+      type: code_review
+      evidence: cache_config
+      evidence: cache_implementation
+    references:
+      - standard: Best-Practice
+        section: Cache Management
+    notes:
+      - "缓存必须有上限，否则会无限增长"
+
+  - id: RES-MEM-03
+    title: Bounded Collections
+    level: MUST
+    description: >
+      All in-memory queues, buffers, and collections must be bounded.
+      Unbounded collections are forbidden in production code.
+      Collections must support backpressure when full.
+    applies_to:
+      - queues
+      - buffers
+      - maps
+      - lists
+      - sets
+      - channels
+    rules:
+      max_size_required: true
+      max_queue_size: 10000
+      max_buffer_size_mb: 100
+      max_collection_size: 100000
+      backpressure_required: true
+      reject_when_full: true
+      block_when_full: false
+    verification:
+      type: design_review
+      evidence: queue_design
+      evidence: collection_usage_review
+    references:
+      - standard: Best-Practice
+        section: Bounded Collections
+    notes:
+      - "Map / Queue 增长限制，防止无限增长"
+
+  # Producer-Consumer Rate Constraints
+  - id: RES-MEM-04
+    title: Backpressure Mechanism
+    level: MUST
+    description: >
+      Producers must slow down or stop when consumers cannot keep up.
+      System must prevent producer-consumer rate mismatch from causing
+      unbounded memory growth. This is the root cause of "slow death".
+    applies_to:
+      - async_pipelines
+      - message_queues
+      - event_streams
+      - producer_consumer_patterns
+    rules:
+      backpressure_supported: true
+      drop_or_block_strategy_required: true
+      preferred_strategy: drop_oldest
+      monitor_producer_consumer_rate: true
+      alert_on_rate_mismatch: true
+      rate_mismatch_threshold_percent: 20
+    verification:
+      type: architecture_review
+      evidence: async_pipeline_design
+      evidence: backpressure_implementation
+    references:
+      - standard: Best-Practice
+        section: Backpressure
+    notes:
+      - "这是'慢慢把你拖死'的根源 - 消费速度 < 生产速度"
+
+  # GC / Runtime Baseline
+  - id: RES-MEM-05
+    title: Runtime Memory Configuration
+    level: MUST
+    description: >
+      Runtime memory parameters must be explicitly configured.
+      Default memory settings are often insufficient for production.
+    applies_to:
+      - jvm
+      - golang
+      - python
+      - nodejs
+    rules:
+      explicit_memory_flags_required: true
+      jvm:
+        xmx_required: true
+        xms_required: true
+        gc_tuning_required: true
+        example: "-Xmx2048m -Xms1024m -XX:+UseG1GC"
+      golang:
+        gomemlimit_required: true
+        example: "GOMEMLIMIT=2GiB"
+      python:
+        memory_limit_required: true
+        example: "PYTHONHASHSEED=0 (if applicable)"
+      nodejs:
+        max_old_space_size_required: true
+        example: "--max-old-space-size=2048"
+    verification:
+      type: deployment_review
+      evidence: startup_flags
+      evidence: runtime_config
+    references:
+      - standard: Best-Practice
+        section: Runtime Configuration
+    notes:
+      - "JVM / Go / Python 参数未设是常见问题"
+
+  # OOM Protection and Self-Rescue
+  - id: RES-MEM-06
+    title: OOM Protection Strategy
+    level: MUST
+    description: >
+      System must have OOM protection mechanisms that activate before
+      actual OOM occurs. System must be able to self-rescue.
+    rules:
+      high_watermark_percent: 80
+      critical_watermark_percent: 90
+      oom_threshold_percent: 95
+      actions:
+        high_watermark:
+          - reject_non_critical_requests
+          - clear_caches
+          - trigger_gc
+          - emit_warning_alert
+        critical_watermark:
+          - enter_read_only_mode
+          - stop_background_tasks
+          - aggressive_cache_eviction
+          - emit_critical_alert
+        oom_threshold:
+          - graceful_degradation
+          - emergency_cleanup
+          - emit_oom_alert
+          - prepare_for_restart
+      oom_killer_config: graceful
+      restart_on_oom: true
+    verification:
+      type: runtime_test
+      evidence: stress_test_result
+      evidence: oom_protection_config
+    references:
+      - standard: Best-Practice
+        section: OOM Protection
+    notes:
+      - "OOM 防护与自救机制"
+
+  # Monitoring and Observability
+  - id: RES-MEM-07
+    title: Memory Usage Monitoring
+    level: MUST
+    description: >
+      Memory usage must be continuously monitored.
+      Memory growth trends must be tracked.
+      Alerts must be configured for memory thresholds.
+    rules:
+      metrics_required:
+        - heap_usage
+        - heap_usage_percent
+        - rss_memory
+        - rss_memory_percent
+        - gc_pause_time
+        - gc_frequency
+        - memory_growth_rate
+      alert_thresholds_defined: true
+      warning_threshold_percent: 70
+      critical_threshold_percent: 85
+      oom_threshold_percent: 95
+      track_memory_trend: true
+      memory_growth_rate_threshold_mb_per_hour: 10
+      alert_on_leak_suspicion: true
+    verification:
+      type: monitoring_review
+      evidence: alert_rules
+      evidence: metrics_dashboard
+    references:
+      - standard: Best-Practice
+        section: Memory Monitoring
+    notes:
+      - "监控与可观测性 - 早发现早处理"
+
+  - id: RES-MEM-08
+    title: Memory Leak Detection
+    level: SHOULD
+    description: >
+      System should detect memory leaks through trend analysis.
+      Memory growth patterns should be analyzed automatically.
+    rules:
+      leak_detection_enabled: true
+      growth_rate_threshold_mb_per_hour: 10
+      growth_rate_threshold_percent_per_hour: 1
+      alert_on_leak_suspicion: true
+      track_memory_trend: true
+      analyze_growth_patterns: true
+    verification:
+      type: runtime_check
+      evidence: memory_trend_analysis
+      evidence: leak_detection_logs
+
+  # Resource Cleanup
+  - id: RES-MEM-09
+    title: Resource Cleanup
+    level: MUST
+    description: >
+      All resources must be properly released after use.
+      Resource leaks must be prevented through proper cleanup.
+    rules:
+      require_resource_cleanup: true
+      use_try_finally: true
+      use_auto_close: true
+      use_defer: true
+      monitor_resource_leaks: true
+      periodic_cleanup_tasks: true
+    verification:
+      type: code_review
+      evidence: resource_cleanup_patterns
+      evidence: cleanup_implementation
+
+  - id: RES-MEM-10
+    title: Long-Running Service Stability
+    level: MUST
+    description: >
+      Services must be stable for long-running periods (72+ hours).
+      Memory usage must not grow unbounded over time.
+    rules:
+      stability_test_required: true
+      stability_test_duration_hours: 72
+      max_memory_growth_percent: 10
+      no_oom_during_stability_test: true
+      memory_usage_stable: true
+    verification:
+      type: runtime_test
+      evidence: stability_test_result
+      evidence: long_running_test_logs
+    notes:
+      - "服务跑几天后突然 OOM - 必须通过稳定性测试"
+
+audit:
+  logging_required: true
+  events:
+    - memory_threshold_reached
+    - oom_event
+    - memory_leak_detected
+    - gc_pause_exceeded
+    - backpressure_activated
+    - cache_eviction
+  required_fields:
+    - timestamp
+    - event_type
+    - memory_usage_mb
+    - memory_usage_percent
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+  process:
+    - record_deviation_entry
+    - explain_reason
+    - risk_assessment
+    - alternative_solution
+    - platform_approval
+
+forbidden:
+  - unbounded_cache
+  - infinite_queue
+  - unbounded_collections
+  - rely_on_os_oom_killer
+  - no_memory_monitoring
+  - no_memory_limits
+  - no_backpressure
+  - no_oom_protection
+
+acceptance:
+  - id: RES-MEM-AC-01
+    scenario: Long-running stability
+    condition:
+      duration_hours: 72
+    expected_result:
+      no_oom: true
+      memory_growth_stable: true
+      memory_growth_under_10_percent: true
+      service_continues: true
+    notes:
+      - "服务跑几天后突然 OOM - 必须通过此测试"
+
+  - id: RES-MEM-AC-02
+    scenario: Cache size limit enforcement
+    expected_result:
+      cache_eviction_works: true
+      cache_size_under_limit: true
+      no_unbounded_growth: true
+      eviction_policy_enforced: true
+
+  - id: RES-MEM-AC-03
+    scenario: Backpressure mechanism
+    expected_result:
+      backpressure_activated_on_rate_mismatch: true
+      memory_growth_controlled: true
+      producer_slows_down: true
+      no_unbounded_queue_growth: true
+
+  - id: RES-MEM-AC-04
+    scenario: OOM protection
+    expected_result:
+      warning_at_80_percent: true
+      critical_action_at_90_percent: true
+      read_only_mode_entered: true
+      oom_prevented: true
+
+  - id: RES-MEM-AC-05
+    scenario: Memory monitoring and alerting
+    expected_result:
+      metrics_collected: true
+      alerts_configured: true
+      alerts_fire_on_threshold: true
+      memory_trend_tracked: true
+
+  - id: RES-MEM-AC-06
+    scenario: Small memory environment
+    condition:
+      available_memory_mb: 1024
+    expected_result:
+      service_starts: true
+      memory_limit_enforced: true
+      no_oom: true
+      graceful_degradation: true
+    notes:
+      - "本地客户环境小内存直接崩 - 必须支持小内存环境"
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers unbounded memory growth prevention
+      - Focuses on long-running service stability
+      - Addresses producer-consumer rate mismatch
+      - Prevents OOM in offline/private deployment scenarios
+    notes:
+      - "这是本地化/私有化环境里仅次于磁盘满的'隐形杀手'"
+      - "特点：慢性、不可见、突然爆炸"
+      - "80% 的 OOM 事故不是 Bug，而是'无限增长 + 无上限设计'"

@@ -1,0 +1,91 @@
+# Baseline Compliance Check Workflow
+# 示例：如何在 CI/CD 中集成 Baseline 检查
+
+name: Baseline Compliance Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  baseline-validation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema
+      
+      - name: Validate YAML syntax
+        run: |
+          # 验证所有 Baseline YAML 文件的语法
+          find baselines -name "*.yaml" -exec python -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" {} \;
+      
+      - name: Validate against Schema
+        run: |
+          # 使用 jsonschema 验证 Baseline 结构
+          python -c "
+          import yaml
+          import json
+          from jsonschema import validate
+          
+          # 加载 Schema
+          with open('schema/baseline.schema.yaml') as f:
+              schema = yaml.safe_load(f)
+          
+          # 验证每个 Baseline
+          import glob
+          for baseline_file in glob.glob('baselines/**/*.yaml'):
+              with open(baseline_file) as f:
+                  baseline = yaml.safe_load(f)
+              try:
+                  validate(instance=baseline, schema=schema)
+                  print(f'✓ {baseline_file} - Valid')
+              except Exception as e:
+                  print(f'✗ {baseline_file} - Invalid: {e}')
+                  exit(1)
+          "
+      
+      - name: Check MUST requirements
+        run: |
+          # 检查 MUST 级别要求
+          python scripts/check_baseline.py \
+            --baseline baselines/identity-access/login-authentication.yaml \
+            --level MUST \
+            --output json > baseline-must-requirements.json
+      
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: baseline-compliance-report
+          path: baseline-must-requirements.json
+
+  baseline-mapping-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Validate mappings
+        run: |
+          # 验证标准映射文件
+          python -c "
+          import yaml
+          import glob
+          
+          for mapping_file in glob.glob('mappings/*.yaml'):
+              with open(mapping_file) as f:
+                  mapping = yaml.safe_load(f)
+              print(f'✓ {mapping_file} - Valid mapping')
+          "

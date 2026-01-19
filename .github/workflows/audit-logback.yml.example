@@ -1,0 +1,36 @@
+name: Audit Logback Configuration
+
+on:
+  pull_request:
+    paths:
+      - '**/logback*.xml'
+      - '**/logback-spring.xml'
+  push:
+    branches: [main, master]
+    paths:
+      - '**/logback*.xml'
+      - '**/logback-spring.xml'
+
+jobs:
+  audit-logback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+      
+      - name: Audit Logback Configuration
+        run: |
+          # 查找所有 logback 配置文件
+          find . -name "logback*.xml" -type f | while read xml_file; do
+            echo "🔍 审计: $xml_file"
+            python3 scripts/audit-logback-xml.py "$xml_file" || exit 1
+          done
+      
+      - name: Check Audit Results
+        run: |
+          echo "✅ 所有 Logback 配置通过 Baseline 审计"

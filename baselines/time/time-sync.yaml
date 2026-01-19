@@ -1,0 +1,230 @@
+# Time Synchronization & Timezone Baseline
+# 时间同步与时区基线
+
+baseline:
+  id: ID-TIME-SYNC
+  name: Time Synchronization & Timezone Baseline
+  domain: Infrastructure
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - System time synchronization
+    - Timezone configuration
+    - Time-based operations (scheduling, expiration)
+    - Timestamp consistency
+  out_of_scope:
+    - Application-level time handling (business logic)
+
+objectives:
+  - Prevent time-related failures
+  - Ensure consistent time across services
+  - Support timezone-aware operations
+  - Enable reliable scheduled tasks
+
+requirements:
+
+  # Time Synchronization
+  - id: TIME-01
+    title: NTP Configuration
+    level: MUST
+    description: >
+      All servers must be configured with NTP (Network Time Protocol).
+      Time synchronization must be enforced.
+    rules:
+      ntp_required: true
+      ntp_servers: ["pool.ntp.org", "time.nist.gov"]
+      sync_interval_seconds: 60
+      max_time_drift_seconds: 1
+      fail_on_sync_failure: false
+    verification:
+      type: config_review
+      evidence: ntp_configuration
+    references:
+      - standard: Best-Practice
+        section: NTP Configuration
+
+  - id: TIME-02
+    title: Time Drift Monitoring
+    level: MUST
+    description: >
+      Time drift must be monitored.
+      Alerts must be sent when time drift exceeds threshold.
+    rules:
+      monitoring_enabled: true
+      check_interval_seconds: 300
+      warning_drift_seconds: 1
+      critical_drift_seconds: 5
+      actions:
+        warning:
+          - emit_warning_alert
+          - trigger_ntp_sync
+        critical:
+          - emit_critical_alert
+          - trigger_emergency_sync
+    verification:
+      type: runtime_check
+      evidence: time_drift_monitoring
+    references:
+      - standard: Best-Practice
+        section: Time Monitoring
+
+  - id: TIME-03
+    title: Timezone Configuration
+    level: MUST
+    description: >
+      System timezone must be configured consistently.
+      All services must use the same timezone (preferably UTC).
+    rules:
+      timezone_configuration_required: true
+      preferred_timezone: UTC
+      timezone_consistency_required: true
+      timezone_validation: true
+    verification:
+      type: config_review
+      evidence: timezone_configuration
+    references:
+      - standard: Best-Practice
+        section: Timezone Management
+
+  - id: TIME-04
+    title: Timestamp Consistency
+    level: MUST
+    description: >
+      All timestamps must be stored in UTC.
+      Timestamps must be consistent across services.
+    rules:
+      store_in_utc: true
+      use_iso8601_format: true
+      include_timezone: true
+      timestamp_precision: milliseconds
+    verification:
+      type: code_review
+      evidence: timestamp_handling
+    references:
+      - standard: ISO-8601
+        section: Date and Time Format
+
+  # Time-based Operations
+  - id: TIME-05
+    title: Scheduled Task Time Handling
+    level: MUST
+    description: >
+      Scheduled tasks must handle time correctly.
+      Tasks must not fail due to time changes or drift.
+    rules:
+      use_system_time: true
+      handle_time_changes: true
+      skip_on_time_drift: false
+      log_time_issues: true
+    verification:
+      type: code_review
+      evidence: scheduled_task_implementation
+
+  - id: TIME-06
+    title: Token/Token Expiration
+    level: MUST
+    description: >
+      Token and session expiration must be based on absolute time.
+      Expiration must not be affected by time drift.
+    rules:
+      use_absolute_time: true
+      validate_expiration: true
+      handle_clock_skew: true
+      clock_skew_tolerance_seconds: 300
+    verification:
+      type: code_review
+      evidence: expiration_handling
+    references:
+      - standard: OWASP-ASVS
+        section: V3.2
+
+  - id: TIME-07
+    title: Log Timestamp Consistency
+    level: MUST
+    description: >
+      All logs must use consistent timestamp format.
+      Log timestamps must be in UTC.
+    rules:
+      log_timestamp_utc: true
+      log_timestamp_format: ISO8601
+      log_timestamp_consistency: true
+    verification:
+      type: config_review
+      evidence: log_timestamp_config
+
+  # Time Validation
+  - id: TIME-08
+    title: Time Validation
+    level: SHOULD
+    description: >
+      System should validate time consistency at startup.
+      Time-related failures should be detected early.
+    rules:
+      startup_time_validation: true
+      validate_ntp_sync: true
+      validate_timezone: true
+      fail_on_critical_issues: true
+    verification:
+      type: code_review
+      evidence: time_validation_logic
+
+audit:
+  logging_required: true
+  events:
+    - time_drift_detected
+    - ntp_sync_failure
+    - timezone_mismatch
+    - time_validation_failure
+  required_fields:
+    - timestamp
+    - event_type
+    - time_drift_seconds
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - no_ntp_configuration
+  - inconsistent_timezone
+  - no_time_monitoring
+  - local_time_storage
+
+acceptance:
+  - id: TIME-AC-01
+    scenario: NTP synchronization
+    expected_result:
+      ntp_configured: true
+      time_synced: true
+      time_drift_under_1_second: true
+
+  - id: TIME-AC-02
+    scenario: Time drift monitoring
+    expected_result:
+      warning_at_1_second: true
+      critical_alert_at_5_seconds: true
+      sync_triggered: true
+
+  - id: TIME-AC-03
+    scenario: Timestamp consistency
+    expected_result:
+      timestamps_in_utc: true
+      iso8601_format: true
+      consistent_across_services: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers NTP, timezone, and timestamp consistency
+      - Prevents time-related failures

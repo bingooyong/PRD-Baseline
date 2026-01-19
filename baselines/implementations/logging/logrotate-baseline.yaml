@@ -1,0 +1,129 @@
+# Logrotate Baseline (System-Level Fallback)
+# Logrotate 基线（系统级兜底）
+
+baseline:
+  id: ID-LOG-ROTATE
+  name: Logrotate Baseline
+  domain: Logging & Observability
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Non-Java applications
+    - Applications without built-in log rotation
+    - System-level log rotation fallback
+  out_of_scope:
+    - Java applications (use Logback/Log4j2)
+    - Applications with built-in rotation
+
+objectives:
+  - Provide system-level log rotation fallback
+  - Ensure logs are rotated even if application doesn't support it
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  - id: LOG-ROTATE-01
+    title: Logrotate Configuration File
+    level: MUST
+    description: >
+      Each application must have a logrotate configuration file.
+      Configuration file must be placed in /etc/logrotate.d/
+    rules:
+      config_file_location: "/etc/logrotate.d/{appname}"
+      config_file_per_application: true
+      config_file_owned_by_root: true
+    verification:
+      type: config_review
+      evidence: logrotate_config_file
+
+  - id: LOG-ROTATE-02
+    title: Rotation Policy
+    level: MUST
+    description: >
+      Logrotate must use both size and time-based rotation.
+      Rotation must be daily with size limit as backup.
+    rules:
+      rotation_modes:
+        - daily
+        - size_based
+      size_limit_mb: 50
+      daily_rotation: true
+      both_modes_active: true
+    verification:
+      type: config_review
+      evidence: logrotate_policy_config
+
+  - id: LOG-ROTATE-03
+    title: File Retention
+    level: MUST
+    description: >
+      Logrotate must retain limited number of rotated files.
+      Maximum age must be enforced.
+    rules:
+      rotate_count: 7
+      maxage_days: 14
+      compress: true
+      delaycompress: false
+    verification:
+      type: config_review
+      evidence: logrotate_retention_config
+
+  - id: LOG-ROTATE-04
+    title: Service Restart Avoidance
+    level: MUST
+    description: >
+      Logrotate must use copytruncate to avoid service restart.
+      Service restart is not acceptable for log rotation.
+    rules:
+      use_copytruncate: true
+      forbid_service_restart: true
+      missingok: true
+      notifempty: true
+    verification:
+      type: config_review
+      evidence: logrotate_method_config
+
+implementation:
+  template: |
+    /opt/app/logs/*.log {
+        daily
+        rotate 7
+        size 50M
+        compress
+        delaycompress
+        missingok
+        notifempty
+        copytruncate
+        maxage 14
+    }
+
+  explanation:
+    daily: "Daily rotation (time-based)"
+    rotate_7: "Keep 7 rotated files (count limit)"
+    size_50M: "Rotate if file exceeds 50MB (size limit)"
+    compress: "Compress rotated files"
+    delaycompress: "Don't compress immediately (false)"
+    missingok: "Don't error if log file is missing"
+    notifempty: "Don't rotate empty files"
+    copytruncate: "Copy and truncate (avoid service restart)"
+    maxage_14: "Delete files older than 14 days (time limit)"
+
+references:
+  - standard: ID-LOG-BASE
+    section: LOG-BASE-06
+  - standard: ID-CAP-LOG
+    section: CAP-LOG-03
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - System-level log rotation fallback
+      - Prevents disk exhaustion for non-Java applications

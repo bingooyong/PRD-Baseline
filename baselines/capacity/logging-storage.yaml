@@ -1,0 +1,343 @@
+# Logging & File Storage Capacity Baseline
+# 日志与文件存储容量治理基线
+
+baseline:
+  id: ID-CAP-LOG
+  name: Logging & File Storage Capacity Baseline
+  domain: Capacity Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application logs
+    - Middleware logs (Nginx, Tomcat, etc.)
+    - System logs
+    - Temporary files
+    - Upload files
+    - Cache files
+    - Export files
+  out_of_scope:
+    - Database data files (see ID-CAP-DATA)
+    - System-level logs (OS logs managed by system)
+    - Third-party application logs (if not configurable)
+
+objectives:
+  - Prevent disk exhaustion caused by log growth
+  - Ensure predictable log retention and cleanup
+  - Enable safe local deployment without manual intervention
+  - Provide automatic disk protection mechanisms
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Log Output Control
+  - id: CAP-LOG-01
+    title: Log Output Must Be Size-Bounded
+    level: MUST
+    description: >
+      All application logs must be written to rotating log files.
+      Unlimited growth of single log files is forbidden.
+      Logs must not be written to stdout/stderr without rotation.
+    rules:
+      require_log_rotation: true
+      forbid_unbounded_files: true
+      forbid_unbounded_stdout: true
+    verification:
+      type: config_review
+      evidence: log_configuration_files
+    references:
+      - standard: Best-Practice
+        section: Log Rotation
+
+  - id: CAP-LOG-02
+    title: Maximum Log File Size
+    level: MUST
+    description: >
+      Each log file must have a maximum size limit.
+      When the limit is reached, the log file must be rotated.
+    rules:
+      max_file_size_mb: 100
+      max_file_size_bytes: 104857600
+      apply_per_file: true
+    notes:
+      - Applies to each individual log file
+      - Total log directory size is controlled by CAP-LOG-04
+    verification:
+      type: automated_check
+      evidence: log_rotation_config
+    references:
+      - standard: Best-Practice
+        section: File Size Limits
+
+  - id: CAP-LOG-03
+    title: Log Rotation Strategy
+    level: MUST
+    description: >
+      System must support log rotation based on size and/or time.
+      Rotation must be automatic and require no manual intervention.
+    rules:
+      rotation_modes:
+        - size_based
+        - time_based
+      size_based:
+        enabled: true
+        rotate_at_mb: 100
+        rotate_at_bytes: 104857600
+      time_based:
+        enabled: true
+        rotate_interval: daily
+        rotate_time: "00:00"
+      compression:
+        compress_after_rotation: true
+        compression_format: gz
+      max_rotated_files: 10
+    verification:
+      type: config_review
+      evidence: log_rotation_policy
+    references:
+      - standard: Best-Practice
+        section: Rotation Strategy
+
+  - id: CAP-LOG-04
+    title: Log Retention and Cleanup
+    level: MUST
+    description: >
+      Log files must have retention policies and automatic cleanup.
+      Total log directory size must be bounded.
+    rules:
+      retention_days: 14
+      max_total_size_mb: 2048
+      max_total_size_gb: 2
+      cleanup_strategy:
+        - delete_oldest
+        - delete_by_age
+      cleanup_schedule: daily
+      cleanup_time: "02:00"
+      min_free_space_gb: 5
+    verification:
+      type: runtime_check
+      evidence: disk_usage_monitor
+      evidence: cleanup_job_logs
+    references:
+      - standard: Best-Practice
+        section: Retention Policy
+
+  - id: CAP-LOG-05
+    title: Disk Watermark Protection
+    level: MUST
+    description: >
+      System must monitor disk usage and take protective actions
+      when disk space is low. This is the last line of defense
+      against disk exhaustion.
+    rules:
+      monitoring_enabled: true
+      check_interval_minutes: 5
+      high_watermark_percent: 80
+      critical_watermark_percent: 90
+      actions:
+        high_watermark:
+          - stop_debug_logging
+          - stop_verbose_logging
+          - emit_warning_alert
+        critical_watermark:
+          - stop_log_write_except_error
+          - stop_non_critical_logs
+          - emit_critical_alert
+          - trigger_emergency_cleanup
+      emergency_cleanup:
+        enabled: true
+        delete_logs_older_than_days: 7
+        keep_min_logs: true
+    verification:
+      type: runtime_check
+      evidence: disk_monitoring_logs
+      evidence: alert_history
+    references:
+      - standard: Best-Practice
+        section: Disk Protection
+
+  - id: CAP-LOG-06
+    title: Log Directory Configuration
+    level: MUST
+    description: >
+      Log directories must be configured on dedicated partitions
+      or volumes when possible. Logs must not be written to root
+      partition or system critical directories.
+    rules:
+      dedicated_log_partition: true
+      min_partition_size_gb: 20
+      forbid_root_partition: true
+      forbid_system_directories: true
+      log_directory_path: "/var/log/{application_name}"
+    verification:
+      type: config_review
+      evidence: filesystem_config
+    references:
+      - standard: Best-Practice
+        section: Directory Layout
+
+  - id: CAP-LOG-07
+    title: Temporary File Management
+    level: MUST
+    description: >
+      Temporary files must have size limits and automatic cleanup.
+      Temporary files must not accumulate indefinitely.
+    rules:
+      max_temp_file_size_mb: 100
+      temp_file_retention_hours: 24
+      cleanup_temp_files: true
+      temp_directory: "/tmp/{application_name}"
+    verification:
+      type: runtime_check
+      evidence: temp_file_cleanup_logs
+
+  - id: CAP-LOG-08
+    title: Upload File Management
+    level: SHOULD
+    description: >
+      Uploaded files should have size limits and retention policies.
+      Old upload files should be automatically cleaned up.
+    rules:
+      max_upload_file_size_mb: 50
+      upload_retention_days: 30
+      cleanup_old_uploads: true
+      upload_directory: "/data/uploads"
+    verification:
+      type: runtime_check
+      evidence: upload_cleanup_logs
+
+  - id: CAP-LOG-09
+    title: Export File Management
+    level: SHOULD
+    description: >
+      Export files should have size limits and automatic cleanup.
+      Export files should be cleaned up after download or expiration.
+    rules:
+      max_export_file_size_mb: 200
+      export_retention_hours: 48
+      cleanup_after_download: true
+      export_directory: "/data/exports"
+    verification:
+      type: runtime_check
+      evidence: export_cleanup_logs
+
+  - id: CAP-LOG-10
+    title: Cache File Management
+    level: SHOULD
+    description: >
+      Cache files should have size limits and automatic eviction.
+      Cache should not grow unbounded.
+    rules:
+      max_cache_size_mb: 1024
+      cache_eviction_policy: LRU
+      cache_directory: "/data/cache"
+    verification:
+      type: runtime_check
+      evidence: cache_size_monitoring
+
+  - id: CAP-LOG-11
+    title: Log Level Configuration
+    level: SHOULD
+    description: >
+      Log levels should be configurable and adjustable based on
+      disk usage. Production environments should use INFO or higher.
+    rules:
+      default_log_level: INFO
+      production_log_level: INFO
+      debug_log_level_allowed: false
+      dynamic_log_level_adjustment: true
+    verification:
+      type: config_review
+      evidence: log_level_config
+
+  - id: CAP-LOG-12
+    title: Log Format and Structured Logging
+    level: SHOULD
+    description: >
+      Logs should use structured format (JSON) to enable efficient
+      parsing and filtering. This helps reduce log volume.
+    rules:
+      structured_logging: true
+      log_format: JSON
+      enable_log_filtering: true
+    verification:
+      type: config_review
+      evidence: log_format_config
+
+audit:
+  logging_required: true
+  events:
+    - log_rotation
+    - log_cleanup
+    - disk_watermark_reached
+    - emergency_cleanup_triggered
+  required_fields:
+    - timestamp
+    - event_type
+    - disk_usage_percent
+    - action_taken
+    - log_directory_size
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+  process:
+    - record_deviation_entry
+    - explain_reason
+    - risk_assessment
+    - alternative_solution
+    - platform_approval
+
+forbidden:
+  - write_logs_to_root_partition
+  - unbounded_stdout_redirect
+  - manual_log_cleanup_required
+  - unbounded_single_log_file
+  - no_disk_monitoring
+  - no_automatic_cleanup
+
+acceptance:
+  - id: CAP-LOG-AC-01
+    scenario: Log file size limit enforcement
+    expected_result:
+      log_file_rotated_at_100mb: true
+      no_single_file_exceeds_limit: true
+      rotation_automatic: true
+
+  - id: CAP-LOG-AC-02
+    scenario: Log retention and cleanup
+    expected_result:
+      logs_older_than_14_days_deleted: true
+      total_log_size_under_2gb: true
+      cleanup_runs_daily: true
+
+  - id: CAP-LOG-AC-03
+    scenario: Disk watermark protection
+    expected_result:
+      warning_at_80_percent: true
+      critical_action_at_90_percent: true
+      log_write_stopped_except_errors: true
+      alert_emitted: true
+
+  - id: CAP-LOG-AC-04
+    scenario: Emergency cleanup
+    expected_result:
+      emergency_cleanup_triggered: true
+      old_logs_deleted: true
+      disk_space_freed: true
+      service_continues: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers log rotation, retention, and disk protection
+      - Prevents disk exhaustion in local/private deployments

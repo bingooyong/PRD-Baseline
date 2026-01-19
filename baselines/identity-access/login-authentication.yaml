@@ -1,0 +1,581 @@
+# Login & Authentication Baseline
+# Enterprise-level authentication requirements baseline
+
+baseline:
+  id: ID-AUTH-LOGIN
+  name: Login & Authentication Baseline
+  domain: Identity & Access Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Security Architecture Committee
+  effective_date: "2024-01-01"
+  review_cycle_months: 12
+
+scope:
+  in_scope:
+    - All B2B products
+    - All backend services providing user authentication
+    - Web / API / Console / Admin / OpenAPI login endpoints
+    - Username/Email/Phone + Password authentication
+    - Multi-factor authentication (MFA) scenarios
+    - Single Sign-On (SSO) scenarios
+  out_of_scope:
+    - Third-party IdP internal implementation (see SSO Baseline)
+    - Non-interactive system accounts (see Service Account Baseline)
+    - API Key / Token authentication (see API Authentication Baseline)
+    - Biometric authentication implementation details
+
+objectives:
+  - Prevent account enumeration, credential stuffing, and brute-force attacks
+  - Ensure secure storage and transmission of credentials
+  - Support compliance auditing and traceability
+  - Meet enterprise SDL / compliance baseline requirements
+  - Provide consistent user authentication experience
+
+requirements:
+
+  # Identity Model
+  - id: AUTH-01
+    title: Unique User Identity
+    level: MUST
+    description: >
+      System must define an immutable unique user identifier (User ID).
+      Login identifiers (username, email, phone) must not be used as primary keys.
+      Login identifiers must be changeable, while User ID is immutable.
+      User ID must be globally unique and not reusable.
+    verification:
+      type: design_review
+      evidence: user_model_definition
+    references:
+      - standard: OWASP-ASVS
+        section: V2.1
+
+  - id: AUTH-02
+    title: Login Identifier Support
+    level: MUST
+    description: >
+      System must support at least one login identifier type.
+      System should support multiple login identifier types (user selectable).
+      Login identifiers must be unique within the same type.
+    rules:
+      supported_types:
+        - username
+        - email
+        - phone
+      min_supported_types: 1
+    verification:
+      type: functional_test
+      evidence: login_identifier_validation
+
+  # Credential Management
+  - id: AUTH-03
+    title: Password Storage
+    level: MUST
+    description: >
+      Passwords must be stored using strong, irreversible hashing algorithms.
+    allowed_algorithms:
+      - name: bcrypt
+        min_cost_factor: 10
+      - name: argon2id
+        recommended: true
+      - name: scrypt
+    forbidden:
+      - plaintext
+      - reversible_encryption
+      - md5
+      - sha1
+      - sha256_unsalted
+      - custom_crypto
+    verification:
+      type: code_review
+      evidence: password_hashing_module
+    references:
+      - standard: OWASP-ASVS
+        section: V2.4
+
+  - id: AUTH-04
+    title: Password Complexity Policy
+    level: MUST
+    description: >
+      Passwords must meet complexity requirements and reject weak passwords.
+    rules:
+      min_length: 12
+      required_character_sets: 3
+      character_sets:
+        - uppercase: "A-Z"
+        - lowercase: "a-z"
+        - digits: "0-9"
+        - special: "!@#$%^&*()_+-=[]{}|;:,.<>?"
+      reject_weak_passwords: true
+      reject_breached_passwords: true
+      reject_username_similar: true
+      reject_sequential_chars: true
+    verification:
+      type: automated_test
+      evidence: password_policy_tests
+    references:
+      - standard: NIST-800-63B
+        section: 5.1.1
+
+  - id: AUTH-05
+    title: Password History
+    level: SHOULD
+    description: >
+      Recent N (≥5) passwords must not be reused.
+      Password history should be retained for at least 12 months.
+      Password change must immediately invalidate all active sessions (except current session).
+    rules:
+      history_count: 5
+      retention_months: 12
+      invalidate_sessions_on_change: true
+    verification:
+      type: functional_test
+      evidence: password_history_validation
+
+  - id: AUTH-06
+    title: Password Expiration
+    level: SHOULD
+    description: >
+      System should support password expiration policy.
+      Default password expiration should be ≤ 90 days.
+      Users should be reminded 7 days before expiration.
+      Expired passwords must force password change.
+    rules:
+      max_age_days: 90
+      reminder_days_before: 7
+      force_change_on_expiry: true
+    verification:
+      type: functional_test
+      evidence: password_expiration_flow
+
+  # Authentication Flow
+  - id: AUTH-07
+    title: Login Failure Handling
+    level: MUST
+    description: >
+      Login failure messages must not distinguish between user not found and incorrect password.
+      Error message must be unified.
+      All login failure attempts must be logged in audit logs.
+    rules:
+      unified_error_message: true
+      error_message: "用户名或密码错误"
+      log_all_failures: true
+    verification:
+      type: security_test
+      evidence: auth_failure_message_consistency
+    references:
+      - standard: OWASP-ASVS
+        section: V2.2
+
+  - id: AUTH-08
+    title: Failure Count and Account Lockout
+    level: MUST
+    description: >
+      After ≥5 consecutive failures, account must be locked.
+      Lockout duration must be ≥15 minutes.
+      During lockout, all login requests must be rejected and logged.
+      Lockout notification should be sent if email is configured.
+    rules:
+      max_failed_attempts: 5
+      lockout_duration_minutes: 15
+      reject_during_lockout: true
+      log_lockout_events: true
+      send_notification: true
+    verification:
+      type: security_test
+      evidence: account_lockout_scenarios
+    references:
+      - standard: OWASP-ASVS
+        section: V2.2
+
+  - id: AUTH-09
+    title: Account Unlock
+    level: MUST
+    description: >
+      System must support automatic unlock (after lockout period) and manual unlock (by admin).
+      System should support self-service unlock (via verified email/phone).
+      Unlock operations must be logged.
+      Unlock should require password change if locked for security reasons.
+    rules:
+      auto_unlock: true
+      admin_unlock: true
+      self_service_unlock: true
+      log_unlock_operations: true
+      require_password_change_on_security_lock: true
+    verification:
+      type: functional_test
+      evidence: account_unlock_scenarios
+
+  - id: AUTH-10
+    title: Automated Protection
+    level: SHOULD
+    description: >
+      Login failures should trigger CAPTCHA (e.g., after 3 consecutive failures).
+      Must support rate limiting at API level.
+      Should support abnormal IP / geographic detection.
+      Should support device fingerprinting.
+    rules:
+      captcha_after_failures: 3
+      rate_limiting_required: true
+      rate_limit_per_ip_per_minute: 5
+      rate_limit_per_account_per_hour: 10
+      detect_abnormal_ip: true
+      detect_abnormal_geography: true
+      device_fingerprinting: true
+    verification:
+      type: security_test
+      evidence: automated_protection_validation
+
+  # Multi-Factor Authentication
+  - id: AUTH-11
+    title: MFA Capability
+    level: SHOULD
+    description: >
+      System should support at least one MFA method.
+      Admin accounts must enforce MFA.
+      After MFA is enabled, login flow must require second factor verification.
+    supported_methods:
+      - TOTP
+      - SMS_OTP
+      - Email_OTP
+      - Hardware_Key_FIDO2
+    mandatory_for:
+      - admin_accounts
+    min_supported_methods: 1
+    verification:
+      type: functional_test
+      evidence: mfa_flow_validation
+    references:
+      - standard: NIST-800-63B
+        section: 6.1
+
+  - id: AUTH-12
+    title: MFA Failure Handling
+    level: MUST
+    description: >
+      MFA verification failures must follow the same lockout policy as login failures.
+      MFA verification failures must be logged.
+      MFA failures must not reveal MFA method or account information.
+    rules:
+      follow_login_lockout_policy: true
+      log_mfa_failures: true
+      no_information_disclosure: true
+    verification:
+      type: security_test
+      evidence: mfa_failure_handling
+
+  # Session & Token Management
+  - id: AUTH-13
+    title: Session Generation
+    level: MUST
+    description: >
+      Successful login must generate a unique session identifier.
+      Session identifier must not contain business meaning (e.g., user ID, timestamp).
+      Session identifier must be unpredictable (use CSPRNG).
+      Session identifier length must be ≥32 characters (256 bits).
+    rules:
+      unique_session_id: true
+      no_business_meaning: true
+      use_csprng: true
+      min_length: 32
+    verification:
+      type: code_review
+      evidence: session_generation_logic
+
+  - id: AUTH-14
+    title: Session Storage
+    level: MUST
+    description: >
+      Session token must be stored in HttpOnly Cookie (prevent XSS).
+      Session token Cookie must set Secure flag (HTTPS only).
+      Session token Cookie should set SameSite attribute (prevent CSRF).
+      Session token must not be transmitted in URL parameters.
+    rules:
+      http_only_cookie: true
+      secure_flag: true
+      same_site: "Lax"  # or "Strict"
+      no_url_transmission: true
+    verification:
+      type: code_review
+      evidence: session_storage_implementation
+
+  - id: AUTH-15
+    title: Session Lifecycle
+    level: MUST
+    description: >
+      Session must have expiration time configured.
+      On logout, session must be immediately invalidated and server-side data cleared.
+      On password change, all active sessions must be invalidated (except current session).
+    rules:
+      idle_timeout_minutes: 30
+      absolute_timeout_hours: 8
+      invalidate_on_logout: true
+      clear_server_data_on_logout: true
+      invalidate_on_password_change: true
+      keep_current_session_on_password_change: true
+    verification:
+      type: code_review
+      evidence: session_lifecycle_logic
+    references:
+      - standard: OWASP-ASVS
+        section: V3.1
+
+  - id: AUTH-16
+    title: Concurrent Login Policy
+    level: MAY
+    description: >
+      System may configure concurrent login behavior.
+    rules:
+      allow_multiple_sessions: true
+      max_concurrent_sessions: 5
+      support_kick_off: true
+    verification:
+      type: functional_test
+      evidence: concurrent_session_handling
+
+  - id: AUTH-17
+    title: Session Renewal
+    level: SHOULD
+    description: >
+      System should support automatic session renewal (when user has activity).
+      Session renewal must not extend absolute timeout.
+      Session renewal operations should be logged (optional).
+    rules:
+      auto_renewal: true
+      no_absolute_timeout_extension: true
+      log_renewal: false
+    verification:
+      type: functional_test
+      evidence: session_renewal_behavior
+
+  # API Security
+  - id: AUTH-18
+    title: Login API Security
+    level: MUST
+    description: >
+      Login API must use HTTPS (TLS 1.2 or higher).
+      Must prohibit plaintext credential transmission.
+      Must prohibit credential transmission in URL.
+      Must prohibit credential transmission in HTTP Header (except Authorization).
+      Must implement rate limiting.
+    rules:
+      require_https: true
+      min_tls_version: "1.2"
+      no_plaintext: true
+      no_url_credentials: true
+      no_header_credentials: true
+      rate_limiting_required: true
+      rate_limit_per_ip_per_minute: 5
+      rate_limit_per_account_per_hour: 10
+    verification:
+      type: security_test
+      evidence: api_security_validation
+    references:
+      - standard: OWASP-ASVS
+        section: V2.1
+
+  - id: AUTH-19
+    title: Timing Attack Prevention
+    level: MUST
+    description: >
+      System must prevent timing attacks.
+      Login verification must have uniform response time (regardless of user existence or password correctness).
+      Password comparison must use constant-time comparison function.
+    rules:
+      uniform_response_time: true
+      constant_time_comparison: true
+    verification:
+      type: security_test
+      evidence: timing_attack_prevention
+
+  # Audit & Logging
+  - id: AUTH-20
+    title: Login Audit Logging
+    level: MUST
+    description: >
+      All login-related events must be logged.
+    events:
+      - login_success
+      - login_failure
+      - account_lock
+      - account_unlock
+      - mfa_verification_success
+      - mfa_verification_failure
+      - session_create
+      - session_destroy
+    required_fields:
+      - user_id
+      - login_identifier
+      - timestamp
+      - source_ip
+      - user_agent
+      - client_type
+      - action_type
+      - result_status
+      - failure_reason
+    verification:
+      type: code_review
+      evidence: audit_logging_implementation
+    references:
+      - standard: ISO-27001
+        section: A.12.4
+
+  - id: AUTH-21
+    title: Audit Log Retention
+    level: MUST
+    description: >
+      Audit logs must be retained for at least 90 days (online).
+      Audit logs should be retained for at least 1 year (archived).
+      Audit logs must be tamper-resistant.
+      Audit logs must support query and export.
+    rules:
+      online_retention_days: 90
+      archived_retention_years: 1
+      tamper_resistant: true
+      support_query: true
+      support_export: true
+    verification:
+      type: design_review
+      evidence: audit_log_retention_policy
+
+  # Error Handling
+  - id: AUTH-22
+    title: Exception Consistency
+    level: MUST
+    description: >
+      All authentication exceptions must not return stack traces, internal logic, or system version information.
+      Must return unified error format.
+    rules:
+      no_stack_trace: true
+      no_internal_logic: true
+      no_version_info: true
+      unified_error_format: true
+    verification:
+      type: code_review
+      evidence: error_handling_implementation
+
+  - id: AUTH-23
+    title: Error Message Standards
+    level: MUST
+    description: >
+      Error messages must be user-friendly.
+      Error messages must not contain sensitive information (passwords, keys).
+      Error messages should provide sufficient debugging information (without compromising security).
+    rules:
+      user_friendly: true
+      no_sensitive_info: true
+      sufficient_debug_info: true
+    verification:
+      type: code_review
+      evidence: error_message_validation
+
+  # SSO
+  - id: AUTH-24
+    title: SSO Support
+    level: SHOULD
+    description: >
+      System should support Single Sign-On (SSO).
+      SSO protocols should support SAML 2.0 and OAuth 2.0 / OpenID Connect.
+      SSO implementation details see SSO Baseline.
+    supported_protocols:
+      - SAML_2.0
+      - OAuth_2.0
+      - OpenID_Connect
+    verification:
+      type: design_review
+      evidence: sso_architecture
+
+  # Anomaly Detection
+  - id: AUTH-25
+    title: Anomalous Login Detection
+    level: SHOULD
+    description: >
+      System should detect anomalous login behavior.
+      When anomalies are detected, should require additional verification, send alerts, and log security events.
+    detection_scenarios:
+      - abnormal_geography
+      - abnormal_ip
+      - abnormal_time
+      - abnormal_device
+    actions_on_detection:
+      - require_additional_verification
+      - send_alert
+      - log_security_event
+    verification:
+      type: functional_test
+      evidence: anomaly_detection_validation
+
+audit:
+  logging_required: true
+  events:
+    - login_success
+    - login_failure
+    - account_lock
+    - account_unlock
+    - mfa_verification_success
+    - mfa_verification_failure
+    - session_create
+    - session_destroy
+  required_fields:
+    - user_id
+    - timestamp
+    - source_ip
+    - client_type
+    - action_type
+    - result_status
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Security_Officer
+  documentation_required: true
+  process:
+    - record_deviation_entry
+    - explain_reason
+    - risk_assessment
+    - alternative_solution
+    - security_approval
+
+acceptance:
+  - id: AUTH-AC-01
+    scenario: Account lockout after consecutive failures
+    expected_result:
+      account_locked: true
+      login_denied: true
+      auto_unlock_after_15min: true
+      login_success_after_unlock: true
+
+  - id: AUTH-AC-02
+    scenario: Password policy enforcement
+    expected_result:
+      password_too_short_rejected: true
+      password_complexity_failed_rejected: true
+      weak_password_rejected: true
+      valid_password_accepted: true
+
+  - id: AUTH-AC-03
+    scenario: Session management
+    expected_result:
+      session_created_on_login: true
+      session_in_http_only_cookie: true
+      session_expires_after_30min_idle: true
+      session_invalidated_on_logout: true
+
+  - id: AUTH-AC-04
+    scenario: Audit logging
+    expected_result:
+      all_login_attempts_logged: true
+      required_fields_present: true
+      logs_queryable: true
+      logs_exportable: true
+      logs_tamper_resistant: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers core login authentication requirements
+      - Supports password authentication, MFA, SSO
+      - Complete audit and compliance requirements

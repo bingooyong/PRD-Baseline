@@ -1,0 +1,255 @@
+# Configuration Governance Baseline
+# 配置治理基线
+
+baseline:
+  id: ID-CFG-GOV
+  name: Configuration Governance Baseline
+  domain: Configuration Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application configuration
+    - Environment-specific configuration
+    - Feature flags
+    - Connection strings
+    - Service endpoints
+    - Configuration validation
+  out_of_scope:
+    - OS-level configuration
+    - Infrastructure configuration (managed separately)
+
+objectives:
+  - Prevent configuration errors and drift
+  - Ensure consistent configuration across environments
+  - Enable safe configuration changes
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Configuration Structure
+  - id: CFG-01
+    title: Configuration Baseline Definition
+    level: MUST
+    description: >
+      All configuration must have baseline definitions.
+      Configuration schema must be documented and validated.
+    rules:
+      require_config_schema: true
+      require_config_documentation: true
+      config_validation_enabled: true
+      default_values_required: true
+    verification:
+      type: design_review
+      evidence: config_schema_definition
+    references:
+      - standard: Best-Practice
+        section: Configuration Schema
+
+  - id: CFG-02
+    title: Environment Isolation
+    level: MUST
+    description: >
+      Configuration must be isolated by environment.
+      Environment-specific values must not leak between environments.
+    rules:
+      environment_isolation_required: true
+      config_per_environment: true
+      no_hardcoded_environment_values: true
+      environment_validation: true
+    verification:
+      type: config_review
+      evidence: environment_config_structure
+
+  - id: CFG-03
+    title: Configuration Validation
+    level: MUST
+    description: >
+      All configuration must be validated at startup.
+      Invalid configuration must prevent service startup.
+    rules:
+      startup_validation_required: true
+      validate_required_fields: true
+      validate_value_ranges: true
+      validate_format: true
+      fail_fast_on_invalid: true
+    verification:
+      type: code_review
+      evidence: config_validation_logic
+    references:
+      - standard: Best-Practice
+        section: Configuration Validation
+
+  - id: CFG-04
+    title: Sensitive Configuration Protection
+    level: MUST
+    description: >
+      Sensitive configuration (passwords, keys, tokens) must be
+      encrypted or stored in secret management systems.
+    rules:
+      encrypt_sensitive_config: true
+      use_secret_management: true
+      no_plaintext_secrets: true
+      secret_rotation_support: true
+    verification:
+      type: security_review
+      evidence: secret_management_usage
+    references:
+      - standard: OWASP-ASVS
+        section: V7.2
+
+  # Configuration Management
+  - id: CFG-05
+    title: Configuration Version Control
+    level: MUST
+    description: >
+      All configuration must be version controlled.
+      Configuration changes must be tracked and auditable.
+    rules:
+      version_control_required: true
+      track_config_changes: true
+      config_change_audit: true
+      rollback_support: true
+    verification:
+      type: process_review
+      evidence: config_version_control
+
+  - id: CFG-06
+    title: Configuration Drift Detection
+    level: SHOULD
+    description: >
+      System should detect configuration drift.
+      Alerts should be sent when configuration differs from baseline.
+    rules:
+      drift_detection_enabled: true
+      baseline_comparison: true
+      alert_on_drift: true
+      auto_correct_drift: false
+    verification:
+      type: runtime_check
+      evidence: drift_detection_logs
+
+  - id: CFG-07
+    title: Configuration Change Approval
+    level: SHOULD
+    description: >
+      Production configuration changes should require approval.
+      Configuration changes should be tested in non-prod first.
+    rules:
+      change_approval_required: true
+      test_before_prod: true
+      change_window: true
+      rollback_plan_required: true
+    verification:
+      type: process_review
+      evidence: change_approval_process
+
+  # Configuration Access
+  - id: CFG-08
+    title: Configuration Access Control
+    level: MUST
+    description: >
+      Configuration access must be controlled.
+      Only authorized personnel can modify production configuration.
+    rules:
+      access_control_required: true
+      rbac_for_config: true
+      audit_config_access: true
+      readonly_for_non_admins: true
+    verification:
+      type: security_review
+      evidence: config_access_control
+
+  - id: CFG-09
+    title: Configuration Backup and Recovery
+    level: MUST
+    description: >
+      Configuration must be backed up regularly.
+      Configuration recovery must be tested.
+    rules:
+      backup_enabled: true
+      backup_frequency: daily
+      backup_retention_days: 30
+      recovery_testing: true
+    verification:
+      type: process_review
+      evidence: backup_and_recovery_process
+
+  # Configuration Documentation
+  - id: CFG-10
+    title: Configuration Documentation
+    level: MUST
+    description: >
+      All configuration parameters must be documented.
+      Documentation must include purpose, default value, and valid range.
+    rules:
+      require_documentation: true
+      document_all_parameters: true
+      include_examples: true
+      keep_docs_synced: true
+    verification:
+      type: documentation_review
+      evidence: config_documentation
+
+audit:
+  logging_required: true
+  events:
+    - config_change
+    - config_validation_failure
+    - config_drift_detected
+    - config_access
+  required_fields:
+    - timestamp
+    - event_type
+    - config_key
+    - old_value
+    - new_value
+    - changed_by
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - hardcoded_configuration
+  - no_config_validation
+  - no_config_version_control
+  - plaintext_secrets
+  - no_environment_isolation
+
+acceptance:
+  - id: CFG-AC-01
+    scenario: Configuration validation
+    expected_result:
+      invalid_config_rejected: true
+      service_fails_to_start: true
+      clear_error_message: true
+
+  - id: CFG-AC-02
+    scenario: Environment isolation
+    expected_result:
+      config_per_environment: true
+      no_cross_environment_leak: true
+      environment_validation_works: true
+
+  - id: CFG-AC-03
+    scenario: Configuration change tracking
+    expected_result:
+      changes_logged: true
+      changes_auditable: true
+      rollback_possible: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers configuration validation, version control, and drift detection
+      - Prevents configuration errors in production

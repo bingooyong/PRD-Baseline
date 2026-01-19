@@ -1,0 +1,331 @@
+# Observability & Monitoring Baseline
+# 可观测性与监控基线
+
+baseline:
+  id: ID-OBS-BASE
+  name: Observability & Monitoring Baseline
+  domain: Operations
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application metrics
+    - Logging
+    - Distributed tracing
+    - Alerting
+    - SLO/SLA definition
+    - Health checks
+  out_of_scope:
+    - Infrastructure monitoring (managed separately)
+    - Business metrics (application-specific)
+
+objectives:
+  - Enable proactive issue detection
+  - Ensure comprehensive observability
+  - Support incident response
+  - Enable SLO-based operations
+
+requirements:
+
+  # Metrics
+  - id: OBS-01
+    title: Core Metrics Collection
+    level: MUST
+    description: >
+      Core application metrics must be collected and exposed.
+      Metrics must include latency, throughput, and error rate.
+    rules:
+      metrics_collection_required: true
+      core_metrics:
+        - request_latency
+        - request_throughput
+        - error_rate
+        - active_connections
+        - resource_usage
+      metrics_exposure: prometheus
+      metrics_endpoint: "/metrics"
+    verification:
+      type: runtime_check
+      evidence: metrics_endpoint
+    references:
+      - standard: Best-Practice
+        section: Metrics Collection
+
+  - id: OBS-02
+    title: Business Metrics
+    level: SHOULD
+    description: >
+      Business-critical metrics should be collected.
+      Metrics should align with business objectives.
+    rules:
+      business_metrics_enabled: true
+      track_business_kpis: true
+      metrics_documentation: true
+    verification:
+      type: design_review
+      evidence: business_metrics_definition
+
+  # Logging
+  - id: OBS-03
+    title: Structured Logging
+    level: MUST
+    description: >
+      All logs must be structured (JSON format).
+      Logs must include correlation IDs for tracing.
+    rules:
+      structured_logging: true
+      log_format: JSON
+      correlation_id_required: true
+      log_level_standardization: true
+    verification:
+      type: code_review
+      evidence: logging_implementation
+    references:
+      - standard: Best-Practice
+        section: Structured Logging
+
+  - id: OBS-04
+    title: Log Levels
+    level: MUST
+    description: >
+      Log levels must be used appropriately.
+      Production must not use DEBUG level.
+    rules:
+      log_levels: [DEBUG, INFO, WARN, ERROR, FATAL]
+      production_log_level: INFO
+      debug_logging_forbidden: true
+      log_level_configurable: true
+    verification:
+      type: config_review
+      evidence: log_level_configuration
+
+  # Distributed Tracing
+  - id: OBS-05
+    title: Distributed Tracing
+    level: SHOULD
+    description: >
+      Distributed tracing should be implemented for microservices.
+      Trace context must be propagated across services.
+    rules:
+      tracing_enabled: true
+      trace_context_propagation: true
+      trace_sampling_rate: 0.1
+      trace_retention_days: 7
+    verification:
+      type: code_review
+      evidence: tracing_implementation
+
+  # Health Checks
+  - id: OBS-06
+    title: Health Check Endpoint
+    level: MUST
+    description: >
+      All services must expose health check endpoints.
+      Health checks must be lightweight and fast.
+    rules:
+      health_check_required: true
+      health_check_endpoint: "/health"
+      health_check_timeout_seconds: 5
+      health_check_components:
+        - database
+        - external_dependencies
+      health_check_response: JSON
+    verification:
+      type: runtime_check
+      evidence: health_check_endpoint
+    references:
+      - standard: Best-Practice
+        section: Health Checks
+
+  - id: OBS-07
+    title: Readiness and Liveness Probes
+    level: SHOULD
+    description: >
+      Services should expose readiness and liveness probes.
+      Probes should be used by orchestration systems.
+    rules:
+      readiness_probe_enabled: true
+      liveness_probe_enabled: true
+      probe_endpoints: ["/ready", "/live"]
+      probe_implementation: lightweight
+    verification:
+      type: runtime_check
+      evidence: probe_endpoints
+
+  # Alerting
+  - id: OBS-08
+    title: Alert Configuration
+    level: MUST
+    description: >
+      Critical alerts must be configured.
+      Alerts must be actionable and not noisy.
+    rules:
+      alerting_required: true
+      critical_alerts:
+        - service_down
+        - high_error_rate
+        - high_latency
+        - resource_exhaustion
+      alert_thresholds_configured: true
+      alert_routing: true
+    verification:
+      type: config_review
+      evidence: alert_configuration
+    references:
+      - standard: Best-Practice
+        section: Alerting
+
+  - id: OBS-09
+    title: Alert Thresholds
+    level: MUST
+    description: >
+      Alert thresholds must be based on SLO.
+      Thresholds must be tuned to reduce false positives.
+    rules:
+      slo_based_thresholds: true
+      threshold_tuning: true
+      false_positive_reduction: true
+      alert_severity_levels: [critical, warning, info]
+    verification:
+      type: design_review
+      evidence: alert_threshold_definition
+
+  # SLO/SLA
+  - id: OBS-10
+    title: SLO Definition
+    level: MUST
+    description: >
+      Service Level Objectives (SLO) must be defined.
+      SLO must be measurable and tracked.
+    rules:
+      slo_definition_required: true
+      slo_metrics:
+        - availability
+        - latency
+        - error_rate
+      slo_targets:
+        availability: 99.9
+        latency_p99_ms: 500
+        error_rate_percent: 0.1
+      slo_tracking: true
+    verification:
+      type: design_review
+      evidence: slo_definition
+    references:
+      - standard: Best-Practice
+        section: SLO Definition
+
+  - id: OBS-11
+    title: SLO Monitoring
+    level: MUST
+    description: >
+      SLO compliance must be monitored.
+      SLO violations must be alerted.
+    rules:
+      slo_monitoring_enabled: true
+      slo_compliance_tracking: true
+      alert_on_slo_violation: true
+      slo_dashboard: true
+    verification:
+      type: runtime_check
+      evidence: slo_monitoring
+
+  # Retention and Storage
+  - id: OBS-12
+    title: Metrics Retention
+    level: MUST
+    description: >
+      Metrics must be retained for appropriate duration.
+      Retention must support incident investigation.
+    rules:
+      metrics_retention_days: 30
+      high_resolution_retention_hours: 24
+      low_resolution_retention_days: 90
+      retention_configurable: true
+    verification:
+      type: config_review
+      evidence: retention_configuration
+
+  - id: OBS-13
+    title: Log Retention
+    level: MUST
+    description: >
+      Logs must be retained per compliance requirements.
+      Log retention must be configurable.
+    rules:
+      log_retention_days: 90
+      compliance_retention_years: 7
+      log_archival: true
+      retention_configurable: true
+    verification:
+      type: config_review
+      evidence: log_retention_config
+
+audit:
+  logging_required: true
+  events:
+    - alert_fired
+    - slo_violation
+    - health_check_failure
+    - metrics_collection_failure
+  required_fields:
+    - timestamp
+    - event_type
+    - metric_name
+    - threshold_value
+    - actual_value
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - no_metrics_collection
+  - no_health_checks
+  - no_alerting
+  - no_slo_definition
+  - unstructured_logging
+
+acceptance:
+  - id: OBS-AC-01
+    scenario: Metrics collection
+    expected_result:
+      metrics_endpoint_available: true
+      core_metrics_collected: true
+      metrics_queryable: true
+
+  - id: OBS-AC-02
+    scenario: Health checks
+    expected_result:
+      health_check_endpoint_available: true
+      health_check_fast: true
+      health_check_accurate: true
+
+  - id: OBS-AC-03
+    scenario: Alerting
+    expected_result:
+      alerts_configured: true
+      alerts_fire_on_threshold: true
+      alerts_actionable: true
+
+  - id: OBS-AC-04
+    scenario: SLO monitoring
+    expected_result:
+      slo_defined: true
+      slo_tracked: true
+      slo_violations_alerted: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers metrics, logging, tracing, alerting, and SLO
+      - Ensures comprehensive observability

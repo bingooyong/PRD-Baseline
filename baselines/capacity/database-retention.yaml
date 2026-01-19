@@ -1,0 +1,378 @@
+# Database Capacity & Retention Baseline
+# 数据库容量与历史数据治理基线
+
+baseline:
+  id: ID-CAP-DATA
+  name: Database Capacity & Retention Baseline
+  domain: Data Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Data Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Transaction log tables
+    - Event/audit log tables
+    - Business operation log tables
+    - Historical data tables
+    - Temporary data tables
+    - Large reference data tables
+  out_of_scope:
+    - Core business transaction data (permanent)
+    - User account data (permanent)
+    - Configuration data (permanent)
+    - Database system tables
+
+objectives:
+  - Prevent database disk exhaustion
+  - Ensure predictable data retention and cleanup
+  - Support large table partitioning and archiving
+  - Enable safe local deployment without manual intervention
+  - Provide automatic capacity protection mechanisms
+
+data_classes:
+  - name: core_transaction
+    description: Core business transaction data
+    retention_policy: permanent
+    cleanup_allowed: false
+  - name: business_log
+    description: Business operation logs
+    retention_policy: time_limited
+    default_retention_days: 90
+    cleanup_allowed: true
+  - name: audit_log
+    description: Audit and compliance logs
+    retention_policy: compliance_required
+    retention_days: 365
+    archive_before_delete: true
+  - name: event_log
+    description: System/application event logs
+    retention_policy: time_limited
+    default_retention_days: 30
+    cleanup_allowed: true
+  - name: temp_data
+    description: Temporary calculation/processing data
+    retention_policy: short_lived
+    retention_days: 7
+    cleanup_allowed: true
+
+requirements:
+
+  # Table Design
+  - id: CAP-DATA-01
+    title: Large Table Partitioning
+    level: MUST
+    description: >
+      Large tables (transaction logs, event tables) must support
+      partitioning or sharding. Tables expected to grow beyond
+      10 million rows must be partitioned.
+    applies_to:
+      - transaction_log_tables
+      - event_tables
+      - audit_log_tables
+      - business_log_tables
+    rules:
+      partition_strategy:
+        - by_time
+        - by_range
+      partition_by_time:
+        interval: monthly
+        partition_format: "YYYY_MM"
+      partition_by_range:
+        max_rows_per_partition: 10000000
+      min_table_size_for_partitioning_mb: 1000
+    verification:
+      type: design_review
+      evidence: table_schema_design
+    references:
+      - standard: Best-Practice
+        section: Table Partitioning
+
+  - id: CAP-DATA-02
+    title: Table Size Threshold
+    level: MUST
+    description: >
+      Tables must have size thresholds. When thresholds are exceeded,
+      system must reject writes or trigger automatic cleanup.
+    rules:
+      max_single_table_size_gb: 50
+      max_single_table_size_mb: 51200
+      max_row_count: 100000000
+      warning_threshold_gb: 40
+      actions_on_exceed:
+        - reject_write
+        - trigger_cleanup
+        - emit_alert
+      actions_on_warning:
+        - emit_warning_alert
+        - schedule_cleanup
+    verification:
+      type: runtime_check
+      evidence: table_size_monitoring
+    references:
+      - standard: Best-Practice
+        section: Table Size Limits
+
+  - id: CAP-DATA-03
+    title: Time-Based Data Retention
+    level: MUST
+    description: >
+      Time-limited data must have retention policies and automatic
+      cleanup. Cleanup must be based on time, not manual intervention.
+    rules:
+      default_retention_days: 90
+      retention_by_data_class:
+        business_log: 90
+        event_log: 30
+        temp_data: 7
+        audit_log: 365
+      cleanup_method:
+        - drop_partition
+        - archive_then_delete
+        - delete_directly
+      archive_before_delete:
+        required_for: audit_log
+        archive_location: "/data/archive"
+        archive_format: compressed_sql
+    verification:
+      type: runtime_check
+      evidence: retention_policy_config
+      evidence: cleanup_job_execution
+    references:
+      - standard: Best-Practice
+        section: Data Retention
+
+  - id: CAP-DATA-04
+    title: Scheduled Cleanup Job
+    level: MUST
+    description: >
+      Data cleanup must be automated through scheduled jobs.
+      Cleanup jobs must run during off-peak hours and be monitored.
+    rules:
+      schedule: daily
+      execution_window: off_peak
+      execution_time: "02:00"
+      job_timeout_minutes: 120
+      batch_size: 10000
+      max_execution_time_per_table_minutes: 30
+      monitoring:
+        enabled: true
+        alert_on_failure: true
+        log_execution_details: true
+    verification:
+      type: job_monitoring
+      evidence: cleanup_job_status
+      evidence: cleanup_job_logs
+    references:
+      - standard: Best-Practice
+        section: Automated Cleanup
+
+  - id: CAP-DATA-05
+    title: Disk Exhaustion Safeguard
+    level: MUST
+    description: >
+      Database must monitor disk usage and take protective actions
+      when disk space is low. This prevents database crashes due to
+      disk exhaustion.
+    rules:
+      monitoring_enabled: true
+      check_interval_minutes: 5
+      disk_usage_threshold_percent: 90
+      warning_threshold_percent: 85
+      actions:
+        warning:
+          - emit_warning_alert
+          - schedule_aggressive_cleanup
+        critical:
+          - stop_non_critical_writes
+          - stop_log_table_writes
+          - trigger_emergency_cleanup
+          - emit_critical_alert
+      emergency_cleanup:
+        enabled: true
+        delete_temp_data: true
+        delete_old_partitions: true
+        keep_min_retention: true
+    verification:
+      type: runtime_check
+      evidence: disk_monitoring_logs
+      evidence: alert_history
+    references:
+      - standard: Best-Practice
+        section: Disk Protection
+
+  - id: CAP-DATA-06
+    title: Index Management
+    level: SHOULD
+    description: >
+      Large tables should have appropriate indexes to support
+      efficient cleanup queries. Unused indexes should be removed
+      to save space.
+    rules:
+      index_maintenance: true
+      remove_unused_indexes: true
+      index_rebuild_schedule: weekly
+    verification:
+      type: design_review
+      evidence: index_analysis_report
+
+  - id: CAP-DATA-07
+    title: Archive Strategy
+    level: SHOULD
+    description: >
+      Important historical data should be archived before deletion.
+      Archive files should be compressed and stored separately.
+    rules:
+      archive_enabled: true
+      archive_format: compressed_sql
+      archive_location: "/data/archive"
+      archive_retention_years: 7
+      archive_cleanup: true
+    verification:
+      type: runtime_check
+      evidence: archive_job_execution
+
+  - id: CAP-DATA-08
+    title: Database Growth Monitoring
+    level: MUST
+    description: >
+      Database size must be monitored and growth trends tracked.
+      Alerts must be sent when growth rate exceeds thresholds.
+    rules:
+      monitoring_enabled: true
+      growth_rate_threshold_percent_per_month: 10
+      alert_on_growth_spike: true
+      track_growth_trend: true
+    verification:
+      type: runtime_check
+      evidence: database_size_monitoring
+
+  - id: CAP-DATA-09
+    title: Transaction Log Management
+    level: MUST
+    description: >
+      Database transaction logs must be managed to prevent unbounded
+      growth. Log backups and truncation must be automated.
+    rules:
+      log_backup_enabled: true
+      log_backup_interval_hours: 1
+      log_truncation_enabled: true
+      max_log_size_gb: 10
+    verification:
+      type: config_review
+      evidence: transaction_log_config
+
+  - id: CAP-DATA-10
+    title: Query Performance Impact
+    level: SHOULD
+    description: >
+      Cleanup operations should not impact query performance.
+      Cleanup should use low-priority operations and be throttled.
+    rules:
+      low_priority_cleanup: true
+      throttle_cleanup_operations: true
+      max_io_impact_percent: 20
+    verification:
+      type: runtime_check
+      evidence: cleanup_performance_impact
+
+  - id: CAP-DATA-11
+    title: Data Classification and Tagging
+    level: SHOULD
+    description: >
+      Tables should be classified and tagged with retention policies.
+      This enables automated retention management.
+    rules:
+      data_classification_enabled: true
+      retention_policy_tagging: true
+      metadata_tracking: true
+    verification:
+      type: design_review
+      evidence: table_metadata
+
+audit:
+  logging_required: true
+  events:
+    - cleanup_job_execution
+    - partition_drop
+    - data_archive
+    - disk_threshold_reached
+    - emergency_cleanup_triggered
+    - table_size_exceeded
+  required_fields:
+    - timestamp
+    - event_type
+    - table_name
+    - rows_affected
+    - disk_usage_percent
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Data_Architect
+  documentation_required: true
+  process:
+    - record_deviation_entry
+    - explain_reason
+    - risk_assessment
+    - alternative_solution
+    - data_architect_approval
+
+forbidden:
+  - unbounded_log_tables
+  - delete_without_retention_policy
+  - manual_sql_cleanup_in_production
+  - no_table_size_monitoring
+  - no_automatic_cleanup
+  - no_disk_protection
+
+acceptance:
+  - id: CAP-DATA-AC-01
+    scenario: Large table partitioning
+    expected_result:
+      tables_partitioned_by_time: true
+      partition_interval_monthly: true
+      partition_drop_works: true
+
+  - id: CAP-DATA-AC-02
+    scenario: Table size threshold enforcement
+    expected_result:
+      warning_at_40gb: true
+      write_rejected_at_50gb: true
+      cleanup_triggered: true
+
+  - id: CAP-DATA-AC-03
+    scenario: Time-based data retention
+    expected_result:
+      data_older_than_retention_deleted: true
+      cleanup_runs_daily: true
+      retention_policy_enforced: true
+
+  - id: CAP-DATA-AC-04
+    scenario: Disk exhaustion safeguard
+    expected_result:
+      warning_at_85_percent: true
+      critical_action_at_90_percent: true
+      non_critical_writes_stopped: true
+      emergency_cleanup_triggered: true
+      alert_emitted: true
+
+  - id: CAP-DATA-AC-05
+    scenario: Scheduled cleanup job
+    expected_result:
+      cleanup_job_runs_daily: true
+      cleanup_during_off_peak: true
+      cleanup_monitored: true
+      failure_alerts_sent: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers table partitioning, retention, and disk protection
+      - Prevents database disk exhaustion in local/private deployments

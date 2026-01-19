@@ -1,0 +1,31 @@
+# NIST SP 800-63B Mapping
+# Maps Baseline requirements to NIST Digital Identity Guidelines
+
+mapping:
+  standard: NIST-SP-800-63B
+  version: "3.0.3"
+  description: Mapping from PRD Baseline to NIST SP 800-63B requirements
+
+baseline_mappings:
+  ID-AUTH-LOGIN:
+    requirements:
+      AUTH-04:
+        - nist_section: "5.1.1"
+          title: "Memorized Secret Verifiers"
+          description: "Password complexity and strength requirements"
+      AUTH-11:
+        - nist_section: "6.1"
+          title: "Authenticator Requirements"
+          description: "Multi-factor authentication requirements"
+      AUTH-13:
+        - nist_section: "7.2"
+          title: "Session Management"
+          description: "Session token generation and management"
+      AUTH-15:
+        - nist_section: "7.3"
+          title: "Session Termination"
+          description: "Session lifecycle and termination"
+
+reference:
+  url: https://pages.nist.gov/800-63-3/
+  document: "SP 800-63B - Digital Identity Guidelines: Authentication and Lifecycle Management"

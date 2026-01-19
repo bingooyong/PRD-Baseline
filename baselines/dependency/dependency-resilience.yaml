@@ -1,0 +1,269 @@
+# Dependency Resilience & External Service Baseline
+# 依赖韧性及外部服务基线
+
+baseline:
+  id: ID-DEP-RES
+  name: Dependency Resilience & External Service Baseline
+  domain: Resilience
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - External API calls
+    - Third-party service dependencies
+    - Database connections
+    - Message queue connections
+    - Service-to-service calls
+  out_of_scope:
+    - Internal service communication (if using service mesh)
+
+objectives:
+  - Prevent cascading failures from dependencies
+  - Ensure graceful degradation
+  - Enable circuit breaker patterns
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Timeout Configuration
+  - id: DEP-01
+    title: Request Timeout
+    level: MUST
+    description: >
+      All external service calls must have timeouts.
+      Timeouts must be configured appropriately for each service.
+    rules:
+      timeout_required: true
+      default_timeout_seconds: 30
+      configurable_timeout: true
+      timeout_per_service: true
+      fail_fast_on_timeout: true
+    verification:
+      type: code_review
+      evidence: timeout_configuration
+    references:
+      - standard: Best-Practice
+        section: Timeout Configuration
+
+  - id: DEP-02
+    title: Connection Timeout
+    level: MUST
+    description: >
+      Connection establishment must have timeouts.
+      Connections must not hang indefinitely.
+    rules:
+      connection_timeout_required: true
+      connection_timeout_seconds: 10
+      retry_on_connection_failure: true
+      max_retry_attempts: 3
+    verification:
+      type: code_review
+      evidence: connection_timeout_config
+
+  # Circuit Breaker
+  - id: DEP-03
+    title: Circuit Breaker Pattern
+    level: MUST
+    description: >
+      External service calls must use circuit breaker pattern.
+      Circuit breaker must prevent cascading failures.
+    rules:
+      circuit_breaker_required: true
+      failure_threshold: 5
+      failure_threshold_percent: 50
+      timeout_window_seconds: 60
+      half_open_retry_interval_seconds: 30
+      states:
+        - closed
+        - open
+        - half_open
+    verification:
+      type: code_review
+      evidence: circuit_breaker_implementation
+    references:
+      - standard: Best-Practice
+        section: Circuit Breaker
+
+  - id: DEP-04
+    title: Circuit Breaker Monitoring
+    level: MUST
+    description: >
+      Circuit breaker state changes must be monitored and logged.
+      Alerts must be sent when circuit opens.
+    rules:
+      monitoring_enabled: true
+      log_state_changes: true
+      alert_on_circuit_open: true
+      track_circuit_metrics: true
+    verification:
+      type: runtime_check
+      evidence: circuit_breaker_monitoring
+
+  # Retry Strategy
+  - id: DEP-05
+    title: Retry Strategy
+    level: SHOULD
+    description: >
+      Retry strategy should be implemented for transient failures.
+      Retry must be exponential backoff with jitter.
+    rules:
+      retry_enabled: true
+      max_retry_attempts: 3
+      exponential_backoff: true
+      backoff_base_seconds: 1
+      jitter_enabled: true
+      retry_on_errors: ["timeout", "connection_error"]
+    verification:
+      type: code_review
+      evidence: retry_implementation
+    references:
+      - standard: Best-Practice
+        section: Retry Strategy
+
+  # Fallback and Degradation
+  - id: DEP-06
+    title: Graceful Degradation
+    level: MUST
+    description: >
+      System must support graceful degradation when dependencies fail.
+      Core functionality must continue when possible.
+    rules:
+      graceful_degradation_required: true
+      fallback_mechanism: true
+      cache_fallback: true
+      default_value_fallback: true
+      user_notification: true
+    verification:
+      type: code_review
+      evidence: degradation_implementation
+    references:
+      - standard: Best-Practice
+        section: Graceful Degradation
+
+  - id: DEP-07
+    title: Dependency Health Check
+    level: MUST
+    description: >
+      Dependency health must be checked regularly.
+      Unhealthy dependencies must be handled appropriately.
+    rules:
+      health_check_enabled: true
+      health_check_interval_seconds: 30
+      health_check_timeout_seconds: 5
+      mark_unhealthy_on_failure: true
+      retry_after_unhealthy: true
+    verification:
+      type: runtime_check
+      evidence: health_check_logs
+
+  # Async and Non-blocking
+  - id: DEP-08
+    title: Async External Calls
+    level: SHOULD
+    description: >
+      External service calls should be asynchronous when possible.
+      Blocking calls should be avoided in request handlers.
+    rules:
+      prefer_async: true
+      async_operations: true
+      avoid_blocking: true
+      use_message_queue: true
+    verification:
+      type: code_review
+      evidence: async_implementation
+
+  # Dependency Isolation
+  - id: DEP-09
+    title: Dependency Isolation
+    level: SHOULD
+    description: >
+      Dependencies should be isolated to prevent cascading failures.
+      Bulkhead pattern should be used when appropriate.
+    rules:
+      isolation_enabled: true
+      separate_thread_pools: true
+      separate_connection_pools: true
+      resource_limits_per_dependency: true
+    verification:
+      type: design_review
+      evidence: isolation_architecture
+
+  # Dependency Monitoring
+  - id: DEP-10
+    title: Dependency Monitoring
+    level: MUST
+    description: >
+      Dependency performance and availability must be monitored.
+      Metrics must be tracked and alerted.
+    rules:
+      monitoring_enabled: true
+      track_response_time: true
+      track_error_rate: true
+      track_availability: true
+      alert_on_degradation: true
+    verification:
+      type: runtime_check
+      evidence: dependency_monitoring
+
+audit:
+  logging_required: true
+  events:
+    - dependency_timeout
+    - circuit_breaker_open
+    - dependency_failure
+    - graceful_degradation_activated
+    - dependency_health_check_failure
+  required_fields:
+    - timestamp
+    - event_type
+    - dependency_name
+    - error_type
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - no_timeout
+  - no_circuit_breaker
+  - blocking_external_calls
+  - no_fallback
+  - no_dependency_monitoring
+
+acceptance:
+  - id: DEP-AC-01
+    scenario: Request timeout
+    expected_result:
+      timeout_enforced: true
+      request_does_not_hang: true
+      timeout_handled_gracefully: true
+
+  - id: DEP-AC-02
+    scenario: Circuit breaker
+    expected_result:
+      circuit_opens_on_failure: true
+      requests_rejected_when_open: true
+      circuit_closes_after_recovery: true
+
+  - id: DEP-AC-03
+    scenario: Graceful degradation
+    expected_result:
+      fallback_activated: true
+      core_functionality_continues: true
+      user_notified: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers timeout, circuit breaker, and graceful degradation
+      - Prevents cascading failures from dependencies

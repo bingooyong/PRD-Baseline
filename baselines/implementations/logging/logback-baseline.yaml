@@ -1,0 +1,215 @@
+# Logback Baseline (Java / Spring)
+# Logback 基线（Java / Spring）
+
+baseline:
+  id: ID-LOG-LOGBACK
+  name: Logback Baseline
+  domain: Logging & Observability
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Java applications using Logback
+    - Spring Boot applications
+    - logback-spring.xml configuration
+  out_of_scope:
+    - Log4j2 applications
+    - Other logging frameworks
+
+objectives:
+  - Ensure Logback configuration meets Baseline requirements
+  - Prevent disk exhaustion from log growth
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  - id: LOG-LOGBACK-00
+    title: Console Appender Forbidden
+    level: MUST
+    description: >
+      ConsoleAppender is strictly forbidden in production environment.
+      Console logging cannot be rotated, has no size limits, and causes
+      disk exhaustion in containerized/private deployment scenarios.
+      All logs must be written to files with proper rotation policies.
+    rules:
+      console_appender_forbidden: true
+      file_appender_required: true
+      production_console_logging_forbidden: true
+    verification:
+      type: config_review
+      evidence: logback_no_console_appender
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-01
+
+  - id: LOG-LOGBACK-01
+    title: RollingFileAppender Configuration
+    level: MUST
+    description: >
+      Logback must use RollingFileAppender with SizeAndTimeBasedRollingPolicy.
+      TimeBasedRollingPolicy alone is forbidden.
+    rules:
+      appender_type: RollingFileAppender
+      rolling_policy: SizeAndTimeBasedRollingPolicy
+      forbid_time_based_only: true
+      forbid_size_based_only: true
+    verification:
+      type: config_review
+      evidence: logback_appender_config
+
+  - id: LOG-LOGBACK-02
+    title: File Size Limit
+    level: MUST
+    description: >
+      Maximum file size must be configured.
+      Default is 50MB, absolute maximum is 100MB.
+    rules:
+      max_file_size_mb: 50
+      max_file_size_absolute_mb: 100
+      max_file_size_config_required: true
+    verification:
+      type: config_review
+      evidence: logback_file_size_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-02
+
+  - id: LOG-LOGBACK-03
+    title: File History Limit
+    level: MUST
+    description: >
+      maxHistory must be set to a finite value.
+      Infinite maxHistory is forbidden.
+    rules:
+      max_history_required: true
+      max_history_days: 7
+      max_history_absolute_max: 30
+      forbid_infinite_history: true
+    verification:
+      type: config_review
+      evidence: logback_history_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-07
+
+  - id: LOG-LOGBACK-04
+    title: Total Size Cap
+    level: MUST
+    description: >
+      totalSizeCap must be configured.
+      No totalSizeCap is forbidden.
+    rules:
+      total_size_cap_required: true
+      total_size_cap_gb: 5
+      total_size_cap_mb: 5120
+      forbid_no_total_size_cap: true
+    verification:
+      type: config_review
+      evidence: logback_total_size_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-07
+
+  - id: LOG-LOGBACK-05
+    title: Async Appender
+    level: MUST
+    description: >
+      Logback must use AsyncAppender in production.
+      Synchronous logging is forbidden.
+    rules:
+      async_appender_required: true
+      sync_appender_forbidden: true
+      async_queue_size: 256
+      async_discard_threshold: WARN
+    verification:
+      type: config_review
+      evidence: logback_async_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-04
+
+  - id: LOG-LOGBACK-06
+    title: Log Level Configuration
+    level: MUST
+    description: >
+      Production must use INFO level.
+      DEBUG level is forbidden.
+    rules:
+      production_log_level: INFO
+      debug_logging_forbidden: true
+      error_logging_always_enabled: true
+    verification:
+      type: config_review
+      evidence: logback_level_config
+    references:
+      - standard: ID-LOG-BASE
+        section: LOG-BASE-03
+
+implementation:
+  template: |
+    <configuration>
+        <appender name="FILE"
+                  class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/opt/app/logs/app.log</file>
+            
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>
+                    /opt/app/logs/app.%d{yyyy-MM-dd}.%i.log.gz
+                </fileNamePattern>
+                
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>5GB</totalSizeCap>
+            </rollingPolicy>
+            
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+        
+        <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>256</queueSize>
+            <discardingThreshold>WARN</discardingThreshold>
+            <appender-ref ref="FILE" />
+        </appender>
+        
+        <root level="INFO">
+            <appender-ref ref="ASYNC" />
+        </root>
+    </configuration>
+
+  required_elements:
+    - RollingFileAppender
+    - SizeAndTimeBasedRollingPolicy
+    - maxFileSize
+    - maxHistory
+    - totalSizeCap
+    - AsyncAppender
+    - root level="INFO"
+
+  forbidden_patterns:
+    - ConsoleAppender (production forbidden)
+    - TimeBasedRollingPolicy (without SizeBased)
+    - maxHistory="unlimited" or no maxHistory
+    - no totalSizeCap
+    - root level="DEBUG"
+
+references:
+  - standard: ID-LOG-BASE
+    section: All
+  - standard: ID-CAP-LOG
+    section: CAP-LOG-03
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Logback-specific configuration requirements
+      - Prevents disk exhaustion in Java/Spring applications

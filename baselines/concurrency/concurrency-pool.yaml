@@ -1,0 +1,266 @@
+# Concurrency & Connection Pool Management Baseline
+# 并发与连接池管理基线
+
+baseline:
+  id: ID-CONC-POOL
+  name: Concurrency & Connection Pool Management Baseline
+  domain: Resource Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Thread pools
+    - Connection pools (database, HTTP, etc.)
+    - Async task queues
+    - Concurrent request handling
+    - Resource pool exhaustion
+  out_of_scope:
+    - OS-level thread management
+    - Hardware resource limits
+
+objectives:
+  - Prevent thread/connection pool exhaustion
+  - Ensure predictable resource usage
+  - Enable graceful degradation
+  - Support high-concurrency scenarios
+
+requirements:
+
+  # Pool Configuration
+  - id: CONC-01
+    title: Pool Size Limits
+    level: MUST
+    description: >
+      All resource pools must have explicit size limits.
+      Pool sizes must be configured based on capacity planning.
+    rules:
+      require_pool_limits: true
+      max_thread_pool_size: 200
+      max_connection_pool_size: 50
+      min_pool_size: 5
+      pool_size_calculation: capacity_based
+    verification:
+      type: config_review
+      evidence: pool_configuration
+    references:
+      - standard: Best-Practice
+        section: Pool Sizing
+
+  - id: CONC-02
+    title: Pool Exhaustion Handling
+    level: MUST
+    description: >
+      When pool is exhausted, system must handle gracefully.
+      Requests must not hang indefinitely.
+    rules:
+      timeout_on_exhaustion: true
+      timeout_seconds: 30
+      reject_when_full: true
+      graceful_degradation: true
+      error_message_clear: true
+    verification:
+      type: code_review
+      evidence: pool_exhaustion_handling
+    references:
+      - standard: Best-Practice
+        section: Exhaustion Handling
+
+  - id: CONC-03
+    title: Connection Pool Configuration
+    level: MUST
+    description: >
+      Database and external service connection pools must be configured.
+      Connection pool parameters must be tuned for production.
+    rules:
+      database_pool_required: true
+      max_db_connections: 50
+      min_db_connections: 5
+      connection_timeout_seconds: 10
+      idle_timeout_seconds: 600
+      max_lifetime_seconds: 3600
+    verification:
+      type: config_review
+      evidence: connection_pool_config
+    references:
+      - standard: Best-Practice
+        section: Connection Pooling
+
+  - id: CONC-04
+    title: Thread Pool Configuration
+    level: MUST
+    description: >
+      Thread pools must be configured with appropriate sizes.
+      Thread pool parameters must prevent resource exhaustion.
+    rules:
+      thread_pool_required: true
+      max_threads: 200
+      min_threads: 10
+      queue_size: 1000
+      keep_alive_seconds: 60
+    verification:
+      type: config_review
+      evidence: thread_pool_config
+
+  # Pool Monitoring
+  - id: CONC-05
+    title: Pool Usage Monitoring
+    level: MUST
+    description: >
+      Pool usage must be monitored and tracked.
+      Alerts must be sent when pool usage exceeds thresholds.
+    rules:
+      monitoring_enabled: true
+      check_interval_seconds: 30
+      warning_threshold_percent: 70
+      critical_threshold_percent: 85
+      actions:
+        warning:
+          - emit_warning_alert
+        critical:
+          - emit_critical_alert
+          - trigger_investigation
+    verification:
+      type: runtime_check
+      evidence: pool_monitoring_logs
+    references:
+      - standard: Best-Practice
+        section: Pool Monitoring
+
+  - id: CONC-06
+    title: Pool Exhaustion Detection
+    level: MUST
+    description: >
+      Pool exhaustion events must be detected and logged.
+      Exhaustion patterns must be analyzed.
+    rules:
+      exhaustion_detection_enabled: true
+      log_exhaustion_events: true
+      track_exhaustion_frequency: true
+      alert_on_exhaustion: true
+    verification:
+      type: runtime_check
+      evidence: exhaustion_detection_logs
+
+  # Async and Non-blocking
+  - id: CONC-07
+    title: Non-blocking Operations
+    level: SHOULD
+    description: >
+      Long-running operations should use non-blocking I/O.
+      Blocking operations should be avoided in request handlers.
+    rules:
+      prefer_non_blocking: true
+      async_operations: true
+      avoid_blocking_io: true
+      timeout_all_operations: true
+    verification:
+      type: code_review
+      evidence: async_implementation
+
+  - id: CONC-08
+    title: Request Timeout
+    level: MUST
+    description: >
+      All requests must have timeouts.
+      Requests must not hang indefinitely.
+    rules:
+      request_timeout_required: true
+      default_timeout_seconds: 30
+      configurable_timeout: true
+      timeout_handling: graceful
+    verification:
+      type: code_review
+      evidence: timeout_implementation
+
+  # Resource Cleanup
+  - id: CONC-09
+    title: Resource Cleanup
+    level: MUST
+    description: >
+      All resources (connections, threads) must be properly released.
+      Resource leaks must be prevented.
+    rules:
+      require_resource_cleanup: true
+      use_try_finally: true
+      use_auto_close: true
+      monitor_resource_leaks: true
+    verification:
+      type: code_review
+      evidence: resource_cleanup_patterns
+
+  - id: CONC-10
+    title: Connection Health Check
+    level: SHOULD
+    description: >
+      Connection pools should perform health checks.
+      Dead connections should be removed from pool.
+    rules:
+      health_check_enabled: true
+      health_check_interval_seconds: 60
+      remove_dead_connections: true
+      reconnect_on_failure: true
+    verification:
+      type: runtime_check
+      evidence: health_check_logs
+
+audit:
+  logging_required: true
+  events:
+    - pool_exhaustion
+    - pool_threshold_reached
+    - connection_timeout
+    - thread_timeout
+  required_fields:
+    - timestamp
+    - event_type
+    - pool_name
+    - pool_usage_percent
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - unbounded_pools
+  - no_pool_limits
+  - no_timeout
+  - blocking_operations_in_handlers
+  - no_pool_monitoring
+
+acceptance:
+  - id: CONC-AC-01
+    scenario: Pool exhaustion handling
+    expected_result:
+      timeout_on_exhaustion: true
+      request_rejected_gracefully: true
+      error_message_clear: true
+
+  - id: CONC-AC-02
+    scenario: Pool monitoring and alerting
+    expected_result:
+      warning_at_70_percent: true
+      critical_alert_at_85_percent: true
+      exhaustion_detected: true
+
+  - id: CONC-AC-03
+    scenario: Request timeout
+    expected_result:
+      timeout_enforced: true
+      request_does_not_hang: true
+      timeout_handled_gracefully: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers thread/connection pool management
+      - Prevents pool exhaustion incidents

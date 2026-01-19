@@ -1,0 +1,186 @@
+# Baseline Schema Definition
+# 用于验证 Baseline YAML 文件的结构和内容
+
+$schema: http://json-schema.org/draft-07/schema#
+$id: https://prd-baseline.org/schema/baseline.schema.yaml
+
+title: PRD Baseline Schema
+description: Schema for PRD Baseline YAML files
+type: object
+
+required:
+  - baseline
+  - requirements
+
+properties:
+  baseline:
+    type: object
+    required:
+      - id
+      - name
+      - domain
+      - level
+      - version
+      - status
+    properties:
+      id:
+        type: string
+        pattern: '^[A-Z0-9-]+$'
+        description: Unique baseline identifier (e.g., ID-AUTH-LOGIN)
+      name:
+        type: string
+        description: Human-readable baseline name
+      domain:
+        type: string
+        description: Domain category (e.g., Identity & Access Management)
+      level:
+        type: string
+        enum: [Enterprise, Standard, Basic]
+      version:
+        type: string
+        pattern: '^\d+\.\d+\.\d+$'
+        description: Semantic version (MAJOR.MINOR.PATCH)
+      status:
+        type: string
+        enum: [Draft, Review, Approved, Deprecated]
+      owner:
+        type: string
+        description: Owner or committee name
+      effective_date:
+        type: string
+        format: date
+        description: Effective date (YYYY-MM-DD)
+      review_cycle_months:
+        type: integer
+        minimum: 1
+        description: Review cycle in months
+
+  scope:
+    type: object
+    properties:
+      in_scope:
+        type: array
+        items:
+          type: string
+      out_of_scope:
+        type: array
+        items:
+          type: string
+
+  objectives:
+    type: array
+    items:
+      type: string
+
+  requirements:
+    type: array
+    items:
+      type: object
+      required:
+        - id
+        - title
+        - level
+      properties:
+        id:
+          type: string
+          pattern: '^[A-Z0-9-]+$'
+          description: Unique requirement identifier
+        title:
+          type: string
+        level:
+          type: string
+          enum: [MUST, SHOULD, MAY]
+        description:
+          type: string
+        rules:
+          type: object
+          description: Structured rules for this requirement
+        allowed:
+          type: array
+          items:
+            type: string
+        forbidden:
+          type: array
+          items:
+            type: string
+        verification:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [design_review, code_review, automated_test, security_test, functional_test, manual_test]
+            evidence:
+              type: string
+              description: Evidence or artifact name
+        references:
+          type: array
+          items:
+            type: object
+            properties:
+              standard:
+                type: string
+                description: Standard name (e.g., OWASP-ASVS, NIST-800-63B)
+              section:
+                type: string
+                description: Section or requirement ID
+
+  audit:
+    type: object
+    properties:
+      logging_required:
+        type: boolean
+      events:
+        type: array
+        items:
+          type: string
+      required_fields:
+        type: array
+        items:
+          type: string
+
+  deviation:
+    type: object
+    properties:
+      allowed:
+        type: boolean
+      approval_required:
+        type: boolean
+      approver_role:
+        type: string
+      documentation_required:
+        type: boolean
+
+  acceptance:
+    type: array
+    items:
+      type: object
+      required:
+        - id
+        - scenario
+      properties:
+        id:
+          type: string
+          pattern: '^[A-Z0-9-]+-AC-\d+$'
+        scenario:
+          type: string
+        expected_result:
+          type: object
+
+  changelog:
+    type: array
+    items:
+      type: object
+      required:
+        - version
+        - date
+        - changes
+      properties:
+        version:
+          type: string
+        date:
+          type: string
+          format: date
+        changes:
+          type: array
+          items:
+            type: string

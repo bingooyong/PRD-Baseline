@@ -1,0 +1,271 @@
+# Memory Management & OOM Prevention Baseline
+# 内存管理与 OOM 防护基线
+
+baseline:
+  id: ID-MEM-MGMT
+  name: Memory Management & OOM Prevention Baseline
+  domain: Resource Management
+  level: Enterprise
+  version: "1.0.0"
+  status: Approved
+  owner: Platform Architecture Team
+  effective_date: "2024-01-01"
+  review_cycle_months: 6
+
+scope:
+  in_scope:
+    - Application memory usage
+    - Cache memory management
+    - Queue/buffer memory
+    - Memory leaks prevention
+    - GC configuration
+    - Container memory limits
+  out_of_scope:
+    - OS-level memory management
+    - Hardware memory issues
+
+objectives:
+  - Prevent Out of Memory (OOM) crashes
+  - Ensure predictable memory usage
+  - Enable safe long-running services
+  - Support offline/private deployment scenarios
+
+requirements:
+
+  # Memory Limits
+  - id: MEM-01
+    title: Memory Limit Configuration
+    level: MUST
+    description: >
+      All services must have explicit memory limits configured.
+      Memory limits must be enforced at container/process level.
+    rules:
+      require_memory_limit: true
+      memory_limit_mb: 2048
+      memory_limit_gb: 2
+      enforce_at_container_level: true
+      enforce_at_process_level: true
+    verification:
+      type: config_review
+      evidence: memory_limit_config
+    references:
+      - standard: Best-Practice
+        section: Memory Limits
+
+  - id: MEM-02
+    title: Cache Size Limits
+    level: MUST
+    description: >
+      All caches must have size limits (by count or memory).
+      Caches must not grow unbounded.
+    rules:
+      require_cache_limit: true
+      max_cache_size_mb: 512
+      max_cache_entries: 100000
+      cache_eviction_policy: LRU
+      cache_ttl_seconds: 3600
+    verification:
+      type: code_review
+      evidence: cache_implementation
+    references:
+      - standard: Best-Practice
+        section: Cache Management
+
+  - id: MEM-03
+    title: Queue/Buffer Size Limits
+    level: MUST
+    description: >
+      All queues and buffers must have size limits.
+      Queues must not grow unbounded, must support backpressure.
+    rules:
+      require_queue_limit: true
+      max_queue_size: 10000
+      max_buffer_size_mb: 100
+      backpressure_enabled: true
+      reject_when_full: true
+    verification:
+      type: code_review
+      evidence: queue_implementation
+
+  - id: MEM-04
+    title: Map/Collection Size Limits
+    level: MUST
+    description: >
+      In-memory collections (Map, List, Set) must have size limits
+      when used for data processing or caching.
+    rules:
+      require_collection_limit: true
+      max_collection_size: 100000
+      monitor_large_collections: true
+    verification:
+      type: code_review
+      evidence: collection_usage
+
+  # Memory Monitoring
+  - id: MEM-05
+    title: Memory Usage Monitoring
+    level: MUST
+    description: >
+      Memory usage must be monitored and tracked.
+      Alerts must be sent when memory usage exceeds thresholds.
+    rules:
+      monitoring_enabled: true
+      check_interval_seconds: 30
+      warning_threshold_percent: 70
+      critical_threshold_percent: 85
+      oom_threshold_percent: 95
+      actions:
+        warning:
+          - emit_warning_alert
+          - trigger_gc
+        critical:
+          - emit_critical_alert
+          - trigger_aggressive_cleanup
+          - stop_non_critical_operations
+        oom:
+          - emit_oom_alert
+          - trigger_emergency_cleanup
+          - graceful_degradation
+    verification:
+      type: runtime_check
+      evidence: memory_monitoring_logs
+    references:
+      - standard: Best-Practice
+        section: Memory Monitoring
+
+  - id: MEM-06
+    title: Memory Leak Detection
+    level: SHOULD
+    description: >
+      System should detect memory leaks through trend analysis.
+      Memory growth patterns should be monitored.
+    rules:
+      leak_detection_enabled: true
+      growth_rate_threshold_mb_per_hour: 10
+      alert_on_leak_suspicion: true
+      track_memory_trend: true
+    verification:
+      type: runtime_check
+      evidence: memory_trend_analysis
+
+  # GC Configuration
+  - id: MEM-07
+    title: Garbage Collection Configuration
+    level: MUST
+    description: >
+      GC parameters must be configured for predictable behavior.
+      GC must not cause long pauses or memory issues.
+    rules:
+      gc_configuration_required: true
+      max_gc_pause_ms: 200
+      gc_logging_enabled: true
+      gc_tuning_required: true
+    verification:
+      type: config_review
+      evidence: gc_configuration
+    references:
+      - standard: Best-Practice
+        section: GC Tuning
+
+  # Memory Protection
+  - id: MEM-08
+    title: OOM Protection
+    level: MUST
+    description: >
+      System must have OOM protection mechanisms.
+      OOM events must be logged and alerted.
+    rules:
+      oom_protection_enabled: true
+      oom_killer_config: graceful
+      oom_logging_enabled: true
+      oom_alert_enabled: true
+      restart_on_oom: true
+    verification:
+      type: config_review
+      evidence: oom_protection_config
+
+  - id: MEM-09
+    title: Memory Pre-allocation
+    level: SHOULD
+    description: >
+      Critical services should pre-allocate memory to avoid
+      runtime allocation failures.
+    rules:
+      preallocate_memory: true
+      preallocate_size_mb: 512
+    verification:
+      type: code_review
+      evidence: memory_preallocation
+
+  # Resource Cleanup
+  - id: MEM-10
+    title: Resource Cleanup
+    level: MUST
+    description: >
+      All resources must be properly released after use.
+      No resource leaks allowed.
+    rules:
+      require_resource_cleanup: true
+      use_try_finally: true
+      use_auto_close: true
+      monitor_resource_leaks: true
+    verification:
+      type: code_review
+      evidence: resource_cleanup_patterns
+
+audit:
+  logging_required: true
+  events:
+    - memory_threshold_reached
+    - oom_event
+    - memory_leak_detected
+    - gc_pause_exceeded
+  required_fields:
+    - timestamp
+    - event_type
+    - memory_usage_mb
+    - memory_usage_percent
+    - action_taken
+
+deviation:
+  allowed: true
+  approval_required: true
+  approver_role: Platform_Architect
+  documentation_required: true
+
+forbidden:
+  - unbounded_cache
+  - unbounded_queue
+  - no_memory_limits
+  - no_memory_monitoring
+  - no_oom_protection
+
+acceptance:
+  - id: MEM-AC-01
+    scenario: Memory limit enforcement
+    expected_result:
+      memory_limit_enforced: true
+      oom_prevented: true
+      service_stable: true
+
+  - id: MEM-AC-02
+    scenario: Cache size limit
+    expected_result:
+      cache_eviction_works: true
+      cache_size_under_limit: true
+      no_unbounded_growth: true
+
+  - id: MEM-AC-03
+    scenario: Memory monitoring and alerting
+    expected_result:
+      warning_at_70_percent: true
+      critical_alert_at_85_percent: true
+      oom_alert_at_95_percent: true
+
+changelog:
+  - version: "1.0.0"
+    date: "2024-01-01"
+    changes:
+      - Initial Enterprise Baseline
+      - Covers memory limits, monitoring, and OOM prevention
+      - Prevents memory exhaustion in long-running services
